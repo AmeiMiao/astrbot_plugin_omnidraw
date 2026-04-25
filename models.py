@@ -1,5 +1,5 @@
 """
-AstrBot 万象画卷插件 v1.3.0 - 数据模型
+AstrBot 万象画卷插件 v1.4.0 - 数据模型
 """
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
@@ -12,20 +12,18 @@ class ProviderConfig:
     base_url: str
     api_keys: List[str] = field(default_factory=list)
     model: str = ""
+    timeout: float = 60.0  # <--- 新增：超时时间，默认 60 秒
 
 @dataclass
 class PersonaConfig:
     name: str
     base_prompt: str = ""
-    # 这里存储的是一个 URL 或者本地路径
     ref_image_url: Optional[str] = None
 
     @property
     def local_image_exists(self) -> bool:
-        """检查配置的是否是存在的本地文件"""
         if not self.ref_image_url:
             return False
-        # 如果不是 http 开头，且本地存在该文件，则认为是本地人设
         return not self.ref_image_url.startswith("http") and os.path.exists(self.ref_image_url)
 
 @dataclass
@@ -43,7 +41,8 @@ class PluginConfig:
                 api_type=p.get("api_type", "openai_image"),
                 base_url=p.get("base_url", ""),
                 api_keys=[k.strip() for k in p.get("api_keys", "").split("\n") if k.strip()],
-                model=p.get("model", "")
+                model=p.get("model", ""),
+                timeout=float(p.get("timeout", 60.0))  # <--- 新增：安全转为浮点数
             )
             for p in providers_data if p.get("id")
         ]

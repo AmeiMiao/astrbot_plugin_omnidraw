@@ -1,12 +1,22 @@
 """
-AstrBot 万象画卷插件 v3.1 - OpenAI 标准实现 (极度防弹版)
+AstrBot 万象画卷插件 v3.1 - OpenAI 标准实现 (满级防弹版)
 破解失效之谜：严格遵循 multipart/form-data 规范进行改图
 """
 import aiohttp
 import json
 from typing import Any
 from astrbot.api import logger
-from data.plugins.astrbot_plugin_omnidraw.providers.base import BaseProvider
+
+# ==========================================
+# 🛡️ 终极防弹导入机制 (无视框架路径错乱)
+# ==========================================
+try:
+    from .base import BaseProvider
+except ImportError:
+    try:
+        from .providers.base import BaseProvider
+    except ImportError:
+        from data.plugins.astrbot_plugin_omnidraw.providers.base import BaseProvider
 
 class OpenAIProvider(BaseProvider):
 
@@ -27,8 +37,7 @@ class OpenAIProvider(BaseProvider):
         ref_image = kwargs.get("user_ref") or kwargs.get("persona_ref")
 
         if ref_image:
-            # 图生图模式
-            url = base_url + "/images/edits" if not base_url.endswith("/v1") else base_url + "/edits"
+            url = base_url + "/images/edits"
             logger.info("✅ 检测到参考图，正切换至标准改图通道: " + url)
             
             try:
@@ -48,8 +57,7 @@ class OpenAIProvider(BaseProvider):
                 return await self._parse_response(response, base_url)
                 
         else:
-            # 文生图模式
-            url = base_url + "/images/generations" if not base_url.endswith("/v1") else base_url + "/generations"
+            url = base_url + "/images/generations"
             payload = {"model": self.config.model, "prompt": prompt, "n": 1}
             headers = {"Content-Type": "application/json", "Authorization": "Bearer " + current_key}
             
@@ -69,9 +77,6 @@ class OpenAIProvider(BaseProvider):
                     error_msg = error_json["error"]["message"]
             except Exception:
                 pass
-            
-            if "not exist" in error_text.lower() or status == 404:
-                error_msg += " (提示: 您的 API 节点可能不支持标准的 /images/edits 改图接口哦)"
                 
             raise RuntimeError("HTTP " + str(status) + ": " + error_msg)
         

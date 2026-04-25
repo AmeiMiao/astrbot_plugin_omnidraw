@@ -11,31 +11,34 @@
         "model": "dall-e-3"
       }
     },
-    "keys": {
-      "id": {
-        "description": "提供商唯一ID (例如: main_node, backup_node)",
-        "type": "string",
-        "default": "main_node"
-      },
-      "api_type": {
-        "description": "接口类型 (目前支持: openai_image)",
-        "type": "string",
-        "default": "openai_image"
-      },
-      "base_url": {
-        "description": "接口地址 (如: https://api.openai.com/v1)",
-        "type": "string",
-        "default": "https://api.openai.com/v1"
-      },
-      "api_key": {
-        "description": "API Key",
-        "type": "string",
-        "default": ""
-      },
-      "model": {
-        "description": "模型名称 (如: dall-e-3)",
-        "type": "string",
-        "default": "dall-e-3"
+    "items": {
+      "type": "object",
+      "keys": {
+        "id": {
+          "description": "提供商唯一ID (例如: main_node, backup_node)",
+          "type": "string",
+          "default": "main_node"
+        },
+        "api_type": {
+          "description": "接口类型 (目前支持: openai_image)",
+          "type": "string",
+          "default": "openai_image"
+        },
+        "base_url": {
+          "description": "接口地址 (如: https://api.openai.com/v1)",
+          "type": "string",
+          "default": "https://api.openai.com/v1"
+        },
+        "api_key": {
+          "description": "API Key",
+          "type": "string",
+          "default": ""
+        },
+        "model": {
+          "description": "模型名称 (如: dall-e-3)",
+          "type": "string",
+          "default": "dall-e-3"
+        }
       }
     },
     "default": []
@@ -65,21 +68,24 @@
         "ref_image_url": ""
       }
     },
-    "keys": {
-      "name": {
-        "description": "人设名称 (如: 机甲女仆)",
-        "type": "string",
-        "default": "默认人设"
-      },
-      "base_prompt": {
-        "description": "核心基础提示词",
-        "type": "text",
-        "default": "masterpiece, best quality, highly detailed"
-      },
-      "ref_image_url": {
-        "description": "固定参考图URL (可选)",
-        "type": "string",
-        "default": ""
+    "items": {
+      "type": "object",
+      "keys": {
+        "name": {
+          "description": "人设名称 (如: 机甲女仆)",
+          "type": "string",
+          "default": "默认人设"
+        },
+        "base_prompt": {
+          "description": "核心基础提示词",
+          "type": "text",
+          "default": "masterpiece, best quality, highly detailed"
+        },
+        "ref_image_url": {
+          "description": "固定参考图URL (可选)",
+          "type": "string",
+          "default": ""
+        }
       }
     },
     "default": []

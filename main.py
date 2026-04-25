@@ -1,12 +1,11 @@
 """
-AstrBot 万象画卷插件 v1.5.0
+AstrBot 万象画卷插件 v1.6.0
 
-修复补丁：
-- 修复 aiohttp.ClientSession 生命周期问题，防止卡死全局事件循环
+更新说明：
+- 废弃聊天上传指令，全面接入 AstrBot WebUI 原生 Image 上传组件
 """
 
 import aiohttp
-import os
 from typing import AsyncGenerator, Any
 
 from astrbot.api.star import Context, Star, register
@@ -21,35 +20,21 @@ from .core.chain_manager import ChainManager
 from .core.parser import CommandParser
 from .core.persona_manager import PersonaManager
 
-PLUGIN_DATA_DIR = os.path.join("data", "star", "astrbot_plugin_omnidraw")
-PERSONA_IMAGES_DIR = os.path.join(PLUGIN_DATA_DIR, "persona_images")
-
-@register("astrbot_plugin_omnidraw", "your_name", "万象画卷 - 深度多模态工程版", "1.5.0")
+@register("astrbot_plugin_omnidraw", "your_name", "万象画卷 - 深度多模态工程版", "1.6.0")
 class OmniDrawPlugin(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
-        self._setup_local_directories()
-        
-        self.current_raw_config = config or {}
-        self.plugin_config = PluginConfig.from_dict(self.current_raw_config)
+        # WebUI 自动保存文件，我们直接读取配置即可
+        self.plugin_config = PluginConfig.from_dict(config or {})
         self.cmd_parser = CommandParser()
         self.persona_manager = PersonaManager(self.plugin_config)
         
-        # 【关键修复】移除了 __init__ 中的 aiohttp.ClientSession() 
-        # 防止污染 AstrBot 主程序的 asyncio 事件循环
-        logger.info(f"{MessageEmoji.SUCCESS} 万象画卷插件升级完毕! (已修复生命周期防卡死)")
-
-    def _setup_local_directories(self):
-        if not os.path.exists(PERSONA_IMAGES_DIR):
-            try:
-                os.makedirs(PERSONA_IMAGES_DIR)
-            except Exception as e:
-                logger.error(f"❌ 创建本地目录失败: {e}")
+        logger.info(f"{MessageEmoji.SUCCESS} 万象画卷插件 v1.6.0 加载完毕! (已启用 WebUI 极速传图)")
 
     @filter.command("万象帮助")
     @handle_errors
     async def cmd_help(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
-        help_text = """📖 万象画卷 v1.5.0 帮助
+        help_text = """📖 万象画卷 v1.6.0 帮助
 ━━━━━━━━━━━━
 🎨 核心作画:
 /画 [提示词] [--参数]
@@ -58,81 +43,10 @@ class OmniDrawPlugin(Star):
 日常对话提及人设、外貌需求，大模型将自动决策调用画笔。
 
 ⚙️ 管理指令:
-/设置人设图片 [人设名] [发送图片]
 /切模型 [节点ID] [模型名]
-"""
+
+💡 提示：人设参考图请直接前往 WebUI 面板点击上传！"""
         yield event.plain_result(help_text)
-
-    @filter.command("设置人设图片")
-    @handle_errors
-    async def cmd_set_persona_image(self, event: AstrMessageEvent, persona_name: str = "") -> AsyncGenerator[Any, None]:
-        persona_name = persona_name.strip()
-        if not persona_name:
-            available = [p.name for p in self.plugin_config.personas]
-            yield event.plain_result(f"{MessageEmoji.WARNING} 请指定人设名！可用人设: {', '.join(available) if available else '无'}")
-            return
-
-        target_persona_config = None
-        for p in self.plugin_config.personas:
-            if p.name == persona_name:
-                target_persona_config = p
-                break
-        
-        if not target_persona_config:
-            yield event.plain_result(f"{MessageEmoji.ERROR} 未找到名为「{persona_name}」的人设！")
-            return
-
-        images = [comp for comp in event.message_obj.message if isinstance(comp, Image)]
-        if not images:
-            yield event.plain_result(f"{MessageEmoji.WARNING} 请在发送指令的同时附带一张图片！")
-            return
-        
-        image_component = images[0]
-        img_url = getattr(image_component, "url", None)
-        img_path = getattr(image_component, "path", getattr(image_component, "file", None))
-
-        yield event.plain_result(f"{MessageEmoji.INFO} 正在为人设「{persona_name}」处理参考图，请稍候...")
-
-        file_ext = ".png"
-        safe_persona_id = "".join([c for c in persona_name if c.isalpha() or c.isdigit()]).rstrip() or "persona"
-        final_save_name = f"{safe_persona_id}{file_ext}"
-        final_save_path = os.path.join(PERSONA_IMAGES_DIR, final_save_name)
-
-        try:
-            if img_url:
-                # 【按需创建 Session】安全下载图片
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(img_url) as resp:
-                        if resp.status == 200:
-                            with open(final_save_path, "wb") as f:
-                                f.write(await resp.read())
-                        else:
-                            yield event.plain_result(f"{MessageEmoji.ERROR} 下载图片失败，网络状态码: {resp.status}")
-                            return
-            elif img_path and os.path.exists(img_path):
-                import shutil
-                shutil.copy2(img_path, final_save_path)
-            else:
-                yield event.plain_result(f"{MessageEmoji.ERROR} 无法获取该图片的有效路径或链接。")
-                return
-        except Exception as e:
-            yield event.plain_result(f"{MessageEmoji.ERROR} 保存文件失败: {e}")
-            return
-
-        try:
-            personas_list = self.current_raw_config.get("personas", [])
-            for p in personas_list:
-                if p.get("name") == persona_name:
-                    p["ref_image_url"] = final_save_path
-                    break
-            
-            self.plugin_config = PluginConfig.from_dict(self.current_raw_config)
-            self.persona_manager = PersonaManager(self.plugin_config)
-            await self.context.save_plugin_config(self.current_raw_config)
-            
-            yield event.plain_result(f"{MessageEmoji.SUCCESS} 人设「{persona_name}」参考图已成功更新！")
-        except Exception as e:
-            yield event.plain_result(f"{MessageEmoji.WARNING} 错误: {e}")
 
     @filter.command("画")
     @handle_errors
@@ -145,7 +59,6 @@ class OmniDrawPlugin(Star):
         prompt, kwargs = self.cmd_parser.parse(message)
         yield event.plain_result(f"{MessageEmoji.PAINTING} 收到灵感，正在绘制...")
         
-        # 【关键修复】使用 async with 动态安全地创建请求上下文
         async with aiohttp.ClientSession() as session:
             chain_manager = ChainManager(self.plugin_config, session)
             image_url = await chain_manager.run_chain("text2img", prompt, **kwargs)
@@ -173,7 +86,6 @@ class OmniDrawPlugin(Star):
 
         chain_to_use = "selfie" if "selfie" in self.plugin_config.chains else "text2img"
         
-        # 【关键修复】按需创建上下文
         async with aiohttp.ClientSession() as session:
             chain_manager = ChainManager(self.plugin_config, session)
             image_url = await chain_manager.run_chain(chain_to_use, final_prompt, **extra_kwargs)
@@ -195,7 +107,6 @@ class OmniDrawPlugin(Star):
             final_prompt, extra_kwargs = self.persona_manager.build_persona_prompt(selected_persona, action)
             chain_to_use = "selfie" if "selfie" in self.plugin_config.chains else "text2img"
             
-            # 【关键修复】按需创建上下文
             async with aiohttp.ClientSession() as session:
                 chain_manager = ChainManager(self.plugin_config, session)
                 image_url = await chain_manager.run_chain(chain_to_use, final_prompt, **extra_kwargs)
@@ -215,7 +126,6 @@ class OmniDrawPlugin(Star):
         try:
             yield event.plain_result(f"{MessageEmoji.PAINTING} 好的，我马上为你作画，请稍等片刻...")
             
-            # 【关键修复】按需创建上下文
             async with aiohttp.ClientSession() as session:
                 chain_manager = ChainManager(self.plugin_config, session)
                 image_url = await chain_manager.run_chain("text2img", prompt)
@@ -231,7 +141,6 @@ class OmniDrawPlugin(Star):
     @filter.command("切模型")
     @handle_errors
     async def cmd_switch_model(self, event: AstrMessageEvent, provider_id: str = "", new_model: str = "") -> AsyncGenerator[Any, None]:
-        # 代码逻辑不变
         provider_id = provider_id.strip()
         new_model = new_model.strip()
 

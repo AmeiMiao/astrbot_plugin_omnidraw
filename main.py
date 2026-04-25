@@ -1,5 +1,8 @@
 """
-AstrBot 万象画卷插件 v1.1.0
+AstrBot 万象画卷插件 v1.2.0
+
+新增功能：
+- 接入 @llm_tool 允许大语言模型自然语言调用文生图
 """
 
 import aiohttp
@@ -9,6 +12,7 @@ from astrbot.api.star import Context, Star, register
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.message_components import Image, Plain
 from astrbot.api import logger
+from astrbot.api.provider import llm_tool  # <--- 导入大模型工具装饰器
 
 from .models import PluginConfig
 from .constants import MessageEmoji
@@ -17,7 +21,7 @@ from .core.chain_manager import ChainManager
 from .core.parser import CommandParser
 from .core.persona_manager import PersonaManager
 
-@register("astrbot_plugin_omnidraw", "your_name", "万象画卷", "1.1.0")
+@register("astrbot_plugin_omnidraw", "your_name", "万象画卷 - 终极多模态", "1.2.0")
 class OmniDrawPlugin(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
@@ -26,7 +30,7 @@ class OmniDrawPlugin(Star):
         self.chain_manager = ChainManager(self.plugin_config, self._session)
         self.cmd_parser = CommandParser()
         self.persona_manager = PersonaManager(self.plugin_config)
-        logger.info(f"{MessageEmoji.SUCCESS} 万象画卷插件加载完毕!")
+        logger.info(f"{MessageEmoji.SUCCESS} 万象画卷插件加载完毕 (支持大模型 Tool 调用)!")
 
     async def terminate(self):
         if self._session and not self._session.closed:
@@ -35,16 +39,17 @@ class OmniDrawPlugin(Star):
     @filter.command("万象帮助")
     @handle_errors
     async def cmd_help(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
-        help_text = """📖 万象画卷 v1.1.0 帮助
+        help_text = """📖 万象画卷 v1.2.0 帮助
 ━━━━━━━━━━━━
 🎨 核心指令:
 /画 [提示词] [--参数]
 /自拍 [人设名] [动作]
 
-⚙️ 管理指令:
-/切模型 [节点ID] [模型名] - 动态换模型
+🤖 智能召唤 (新!):
+直接对机器人说：“帮我画一张...”
 
-💡 提示: 密钥已支持自动轮询，可在WebUI一行一个填入。"""
+⚙️ 管理指令:
+/切模型 [节点ID] [模型名]"""
         yield event.plain_result(help_text)
 
     @filter.command("切模型")
@@ -68,8 +73,8 @@ class OmniDrawPlugin(Star):
         old_model = provider.model
         provider.model = new_model
         
-        logger.info(f"👤 用户 {event.get_sender_id()} 将节点 {provider_id} 的模型从 {old_model} 切换为 {new_model}")
-        yield event.plain_result(f"{MessageEmoji.SUCCESS} 节点 [{provider_id}] 模型已切换: {old_model} ➔ {new_model}")
+        logger.info(f"👤 用户 {event.get_sender_id()} 将节点 {provider_id} 的模型切换为 {new_model}")
+        yield event.plain_result(f"{MessageEmoji.SUCCESS} 节点 [{provider_id}] 模型已切换为: {new_model}")
 
     @filter.command("画")
     @handle_errors
@@ -80,7 +85,7 @@ class OmniDrawPlugin(Star):
             return
         
         prompt, kwargs = self.cmd_parser.parse(message)
-        yield event.plain_result(f"{MessageEmoji.PAINTING} 收到灵感，正在绘制，请稍候...")
+        yield event.plain_result(f"{MessageEmoji.PAINTING} 收到指令，正在绘制，请稍候...")
         
         image_url = await self.chain_manager.run_chain("text2img", prompt, **kwargs)
         yield event.chain_result([
@@ -114,3 +119,30 @@ class OmniDrawPlugin(Star):
             Image.fromURL(image_url),
             Plain(f"\n{MessageEmoji.SUCCESS} 拍好啦！")
         ])
+
+    # ==========================================
+    # 🌟 核心新功能：大模型自然语言绘图工具
+    # ==========================================
+    @llm_tool(name="generate_image", description="AI 绘图生成器。当用户请求画图、生成图片或提出明确的画面描述要求你画出来时，必须调用此工具。传入的 prompt 必须是你根据用户需求扩写并翻译成英文的高质量正向提示词。")
+    async def tool_generate_image(self, event: AstrMessageEvent, prompt: str) -> AsyncGenerator[Any, None]:
+        """
+        供大语言模型调用的画图接口。
+        """
+        logger.info(f"🧠 [LLM Tool] 触发自然语言画图！模型生成的提示词: {prompt}")
+        
+        try:
+            # 告诉用户大模型已经响应了画图请求
+            yield event.plain_result(f"{MessageEmoji.PAINTING} 好的，我马上为你作画，请稍等片刻...")
+            
+            # 直接复用我们写好的、带兜底重试逻辑的画图调度器
+            image_url = await self.chain_manager.run_chain("text2img", prompt)
+            
+            # 返回图片和完成语
+            yield event.chain_result([
+                Image.fromURL(image_url),
+                Plain(f"\n{MessageEmoji.SUCCESS} 铛铛！为你画好啦！")
+            ])
+            
+        except Exception as e:
+            logger.error(f"❌ [LLM Tool] 画图失败: {e}", exc_info=True)
+            yield event.plain_result(f"{MessageEmoji.ERROR} 哎呀，画笔好像坏了：{str(e)}")

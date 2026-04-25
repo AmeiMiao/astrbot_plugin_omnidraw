@@ -1,5 +1,5 @@
 """
-AstrBot 万象画卷插件 v1.4.0 - 数据模型
+AstrBot 万象画卷插件 v1.7.0 - 数据模型
 """
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
@@ -12,25 +12,20 @@ class ProviderConfig:
     base_url: str
     api_keys: List[str] = field(default_factory=list)
     model: str = ""
-    timeout: float = 60.0  # <--- 新增：超时时间，默认 60 秒
+    timeout: float = 60.0
 
 @dataclass
 class PersonaConfig:
     name: str
     base_prompt: str = ""
-    ref_image_url: Optional[str] = None
-
-    @property
-    def local_image_exists(self) -> bool:
-        if not self.ref_image_url:
-            return False
-        return not self.ref_image_url.startswith("http") and os.path.exists(self.ref_image_url)
+    ref_image_name: str = "" # 改为 name，接收文件名
 
 @dataclass
 class PluginConfig:
     providers: List[ProviderConfig] = field(default_factory=list)
     chains: Dict[str, List[str]] = field(default_factory=dict)
     personas: List[PersonaConfig] = field(default_factory=list)
+    ref_images_pool: List[str] = field(default_factory=list) # 新增：接收全局图库的绝对路径列表
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "PluginConfig":
@@ -42,7 +37,7 @@ class PluginConfig:
                 base_url=p.get("base_url", ""),
                 api_keys=[k.strip() for k in p.get("api_keys", "").split("\n") if k.strip()],
                 model=p.get("model", ""),
-                timeout=float(p.get("timeout", 60.0))  # <--- 新增：安全转为浮点数
+                timeout=float(p.get("timeout", 60.0))
             )
             for p in providers_data if p.get("id")
         ]
@@ -57,12 +52,17 @@ class PluginConfig:
             PersonaConfig(
                 name=p.get("name", ""),
                 base_prompt=p.get("base_prompt", ""),
-                ref_image_url=p.get("ref_image_url")
+                ref_image_name=p.get("ref_image_name", "")
             )
             for p in personas_data if p.get("name")
         ]
+        
+        # 提取 WebUI 上传后生成的绝对路径列表
+        pool = config_dict.get("ref_images_pool", [])
+        if not isinstance(pool, list):
+            pool = []
 
-        return cls(providers=providers, chains=chains, personas=personas)
+        return cls(providers=providers, chains=chains, personas=personas, ref_images_pool=pool)
 
     def get_provider(self, provider_id: str) -> Optional[ProviderConfig]:
         return next((p for p in self.providers if p.id == provider_id), None)

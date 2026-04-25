@@ -11,7 +11,7 @@
           "base_url": "https://api.openai.com/v1",
           "api_keys": "sk-xxxxxx",
           "model": "dall-e-3",
-          "timeout": 60
+          "timeout": "60"
         }
       }
     },
@@ -26,7 +26,10 @@
         "api_type": {
           "description": "接口类型",
           "type": "string",
-          "options": ["openai_image", "openai_chat"],
+          "options": [
+            "openai_image",
+            "openai_chat"
+          ],
           "default": "openai_image"
         },
         "base_url": {
@@ -46,8 +49,8 @@
         },
         "timeout": {
           "description": "请求超时时间 (秒)。如果画图较慢请调大此值，如 120",
-          "type": "number",
-          "default": 60
+          "type": "string",
+          "default": "60"
         }
       }
     },

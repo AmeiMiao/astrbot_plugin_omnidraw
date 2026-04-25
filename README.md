@@ -9,11 +9,9 @@
 
 ---
 
-## 🆕新增功能
+## 🆕效果图
 
-* **llm调用**：支持llm自主调用
-* **防盗链功能**：更快获取用户附加参考图
-* **权限管理**：控制使用权限
+<img width="446" height="534" alt="PixPin_2026-04-25_20-45-31" src="https://github.com/user-attachments/assets/0a055740-a2e7-4d1d-8e9f-5eb0ebb85365" />
 
 ---
 

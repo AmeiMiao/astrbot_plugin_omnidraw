@@ -1,6 +1,6 @@
 """
 AstrBot 万象画卷插件 v3.1
-功能：新增 QQ 号白名单拦截机制
+功能：修复大模型工具参数丢失问题（移除装饰器占用，启用纯正 docstring 解析） + QQ号白名单
 """
 import aiohttp
 from typing import AsyncGenerator, Any
@@ -33,20 +33,13 @@ class OmniDrawPlugin(Star):
                 return path if (path and not path.startswith("http")) else url
         return ""
 
-    # ==========================================
-    # 🛡️ 新增：权限校验守卫
-    # ==========================================
     def _has_permission(self, event: AstrMessageEvent) -> bool:
-        """检查用户是否有权限使用生图功能"""
         allowed = self.plugin_config.allowed_users
-        # 如果白名单为空，默认全员开放
         if not allowed:
             return True
-            
         sender_id = str(event.get_sender_id())
         if sender_id in allowed:
             return True
-            
         logger.warning(f"🚫 拦截无权限用户调用生图: {sender_id}")
         return False
 
@@ -101,8 +94,16 @@ class OmniDrawPlugin(Star):
             image_url = await chain_manager.run_chain(chain_to_use, final_prompt, **extra_kwargs)
         yield event.chain_result([Image.fromURL(image_url)])
 
-    @llm_tool(name="generate_selfie", description="以此 AI 助理（我）的固定人设拍摄自拍。")
+    # ==========================================
+    # 🚀 核心修复：移除装饰器中的 description，让框架去读取详细的注释！
+    # ==========================================
+    @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str) -> AsyncGenerator[Any, None]:
+        """
+        以此 AI 助理（我）的固定人设拍摄自拍。
+        Args:
+            action (string): 动作和场景描述。纯动作描述即可，无需包含人物长相特征。
+        """
         if not self._has_permission(event):
             yield event.plain_result(f"{MessageEmoji.WARNING} 抱歉，您的账号没有让我自拍的权限哦~")
             return
@@ -121,8 +122,13 @@ class OmniDrawPlugin(Star):
         except Exception as e:
             yield event.plain_result(f"{MessageEmoji.ERROR} 画笔坏了：{str(e)}")
 
-    @llm_tool(name="generate_image", description="AI 画图工具。当用户提出明确的画面要求你画出来时调用此工具。")
+    @llm_tool(name="generate_image")
     async def tool_generate_image(self, event: AstrMessageEvent, prompt: str) -> AsyncGenerator[Any, None]:
+        """
+        AI 画图工具。当用户提出明确的画面要求你画出来时调用此工具。
+        Args:
+            prompt (string): 扩写成英文的高质量动作与场景提示词。
+        """
         if not self._has_permission(event):
             yield event.plain_result(f"{MessageEmoji.WARNING} 抱歉，我目前不能为您画图，权限不足。")
             return

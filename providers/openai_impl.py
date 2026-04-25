@@ -6,7 +6,7 @@ import aiohttp
 import json
 from typing import Any
 from astrbot.api import logger
-from .base import BaseProvider
+from data.plugins.astrbot_plugin_omnidraw.providers.base import BaseProvider
 
 class OpenAIProvider(BaseProvider):
 

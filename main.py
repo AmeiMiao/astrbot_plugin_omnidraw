@@ -1,10 +1,7 @@
 """
 AstrBot 万象画卷插件 v3.1
-功能：修复 SyntaxError，将工具彻底改造为返回纯文本给 LLM 处理
+功能：精简拟真交互流程 (静默作画 -> 底层物理通道发图 -> LLM 自然闲聊收尾)
 """
-import os
-import base64
-import uuid
 import aiohttp
 from typing import AsyncGenerator, Any
 
@@ -47,7 +44,7 @@ class OmniDrawPlugin(Star):
         return False
 
     # ==========================================
-    # 常规指令区 (保持使用 yield 直接发消息)
+    # 常规指令区 (使用 yield 直接发消息)
     # ==========================================
     @filter.command("万象帮助")
     @handle_errors
@@ -101,17 +98,8 @@ class OmniDrawPlugin(Star):
         yield event.chain_result([Image.fromURL(image_url)])
 
     # ==========================================
-    # 🤖 LLM 工具区 (纯函数返回，移除所有 yield)
+    # 🤖 LLM 工具区 (静默发图 + 移交回复权)
     # ==========================================
-    def _save_base64_to_temp(self, b64_url: str) -> str:
-        b64_data = b64_url.split(",", 1)[1]
-        save_dir = os.path.abspath(os.path.join(os.getcwd(), "data", "plugin_data", "astrbot_plugin_omnidraw", "temp_images"))
-        os.makedirs(save_dir, exist_ok=True)
-        file_path = os.path.join(save_dir, f"img_{uuid.uuid4().hex[:8]}.png")
-        with open(file_path, "wb") as f:
-            f.write(base64.b64decode(b64_data))
-        return file_path.replace("\\", "/")
-
     @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str) -> str:
         """
@@ -133,13 +121,14 @@ class OmniDrawPlugin(Star):
                 chain_manager = ChainManager(self.plugin_config, session)
                 image_url = await chain_manager.run_chain(chain_to_use, final_prompt, **extra_kwargs)
             
-            if image_url.startswith("data:image"):
-                image_url = self._save_base64_to_temp(image_url)
+            # 🚀 物理底层发图：使用 await event.send 主动发送，避免产生语法冲突
+            await event.send(event.chain_result([Image.fromURL(image_url)]))
 
-            return f"自拍成功！图片路径：{image_url} \n请你现在立刻用符合你人设的自然语气回复用户，并且必须在你的回复内容的最后面，附上这句 Markdown 代码来发图：![image]({image_url})"
+            # 🚀 移交回复权：返回成功指令，让大模型说俏皮话收尾
+            return "系统提示：自拍图片已经通过底层协议成功发送给用户了。请你现在结合用户刚才的请求，用符合你人设的自然语气回复一两句作为发图后的收尾闲聊 (注意：直接输出纯文本内容，绝对不需要包含任何 Markdown 图片链接)。"
             
         except Exception as e:
-            return f"系统提示：画图引擎发生了错误 ({str(e)})。请向用户道歉，并说明你的画笔坏了。"
+            return f"系统提示：画笔坏了 ({str(e)})。请向用户道歉，并说明无法发图。"
 
     @llm_tool(name="generate_image")
     async def tool_generate_image(self, event: AstrMessageEvent, prompt: str) -> str:
@@ -161,10 +150,11 @@ class OmniDrawPlugin(Star):
                 chain_manager = ChainManager(self.plugin_config, session)
                 image_url = await chain_manager.run_chain("text2img", prompt, **kwargs)
 
-            if image_url.startswith("data:image"):
-                image_url = self._save_base64_to_temp(image_url)
+            # 🚀 物理底层发图
+            await event.send(event.chain_result([Image.fromURL(image_url)]))
 
-            return f"画图任务成功！图片路径：{image_url} \n请你现在立刻回复用户，并且必须在你的回复内容的最后面，附上这句 Markdown 代码来展示你画好的图：![image]({image_url})"
+            # 🚀 移交回复权
+            return "系统提示：画好的图已经物理发送成功了。请你现在立刻回复用户一句话，用符合你人设的语气简单聊两句作为作画后的完美收尾 (直接输出纯文本内容即可，不需要包含图片链接)。"
 
         except Exception as e:
-            return f"系统提示：画图引擎发生了错误 ({str(e)})。请向用户道歉，并说明你的画笔坏了。"
+            return f"系统提示：画笔坏了 ({str(e)})。请向用户道歉，并说明无法发图。"

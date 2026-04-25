@@ -18,63 +18,27 @@
     "items": {
       "type": "object",
       "keys": {
-        "id": {
-          "description": "提供商唯一ID (例如: main_node)",
-          "type": "string",
-          "default": "main_node"
-        },
-        "api_type": {
-          "description": "接口类型",
-          "type": "string",
-          "options": [
-            "openai_image",
-            "openai_chat"
-          ],
-          "default": "openai_image"
-        },
-        "base_url": {
-          "description": "接口地址 (如: https://api.openai.com/v1)",
-          "type": "string",
-          "default": "https://api.openai.com/v1"
-        },
-        "api_keys": {
-          "description": "API 密钥轮询池 (按回车换行，自动轮换)",
-          "type": "text",
-          "default": "sk-xxxxxx"
-        },
-        "model": {
-          "description": "模型名称 (如: dall-e-3, banana)",
-          "type": "string",
-          "default": "dall-e-3"
-        },
-        "timeout": {
-          "description": "请求超时时间 (秒)。如果画图较慢请调大此值，如 120",
-          "type": "string",
-          "default": "60"
-        }
+        "id": { "description": "提供商唯一ID", "type": "string", "default": "main_node" },
+        "api_type": { "description": "接口类型", "type": "string", "options": ["openai_image", "openai_chat"], "default": "openai_image" },
+        "base_url": { "description": "接口地址", "type": "string", "default": "https://api.openai.com/v1" },
+        "api_keys": { "description": "API 密钥轮询池 (按回车换行，自动轮换)", "type": "text", "default": "sk-xxxxxx" },
+        "model": { "description": "模型名称 (如: dall-e-3, banana)", "type": "string", "default": "dall-e-3" },
+        "timeout": { "description": "请求超时时间 (秒)", "type": "string", "default": "60" }
       }
     },
     "default": []
   },
-  "chain_text2img": {
-    "description": "文生图兜底链路 (按顺序尝试节点ID，用英文逗号分隔)",
-    "type": "string",
-    "default": "main_node"
-  },
-  "chain_selfie": {
-    "description": "自拍模式兜底链路 (按顺序尝试节点ID，用英文逗号分隔)",
-    "type": "string",
-    "default": "main_node"
-  },
+  "chain_text2img": { "description": "文生图兜底链路", "type": "string", "default": "main_node" },
+  "chain_selfie": { "description": "自拍模式兜底链路", "type": "string", "default": "main_node" },
   "personas": {
-    "description": "人设库。图片支持使用指令 /设置人设图片 上传，也可在此填入本地绝对路径或URL。",
+    "description": "人设库。请直接点击下方卡片中的按钮上传参考图。",
     "type": "template_list",
     "templates": {
       "default_persona": {
         "name": "我的默认形象",
         "items": {
           "name": "默认人设",
-          "base_prompt": "masterpiece, best quality, highly detailed, beautiful girl, long white hair, blue eyes",
+          "base_prompt": "masterpiece, best quality, beautiful girl, long white hair",
           "ref_image_url": ""
         }
       }
@@ -82,20 +46,12 @@
     "items": {
       "type": "object",
       "keys": {
-        "name": {
-          "description": "人设名称",
-          "type": "string",
-          "default": "默认人设"
-        },
-        "base_prompt": {
-          "description": "人设固定描述提示词",
-          "type": "text",
-          "default": ""
-        },
-        "ref_image_url": {
-          "description": "参考图路径。若使用本地文件，填入绝对路径。",
-          "type": "string",
-          "default": ""
+        "name": { "description": "人设名称", "type": "string", "default": "默认人设" },
+        "base_prompt": { "description": "人设固定描述提示词", "type": "text", "default": "" },
+        "ref_image_url": { 
+          "description": "参考图 (点击右侧按钮直接上传本地图片)", 
+          "type": "image", 
+          "default": "" 
         }
       }
     },

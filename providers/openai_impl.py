@@ -17,22 +17,19 @@ from .base import BaseProvider
 from ..constants import API_TIMEOUT_DEFAULT
 
 class OpenAIProvider(BaseProvider):
-    """OpenAI 标准 /v1/images/generations 接口支持"""
-    
     async def generate_image(self, prompt: str, **kwargs: Any) -> str:
+        current_key = self.get_current_key() # 关键：使用轮询获取 Key
+        
         payload = {
             "model": self.config.model,
             "prompt": prompt,
-            "n": kwargs.get("n", 1)
+            "n": 1,
+            "size": kwargs.get("size", "1024x1024")
         }
         
-        # 兼容用户自定义的 size，如果没有则使用默认
-        if "size" in kwargs:
-            payload["size"] = kwargs["size"]
-            
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.config.api_key}"
+            "Authorization": f"Bearer {current_key}"
         }
         
         # 确保 url 拼接正确

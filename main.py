@@ -1,6 +1,6 @@
 """
-AstrBot 万象画卷插件 v3.0
-核心特性：极简架构 + 动态抓取用户发图 + 原生WebUI管理 + 完整LLM工具支持
+AstrBot 万象画卷插件 v3.1
+功能：新增 QQ 号白名单拦截机制
 """
 import aiohttp
 from typing import AsyncGenerator, Any
@@ -17,17 +17,15 @@ from .core.chain_manager import ChainManager
 from .core.parser import CommandParser
 from .core.persona_manager import PersonaManager
 
-@register("astrbot_plugin_omnidraw", "your_name", "万象画卷 v3.0 - 终极版", "3.0.0")
+@register("astrbot_plugin_omnidraw", "your_name", "万象画卷 v3.1 - 终极版", "3.1.0")
 class OmniDrawPlugin(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
         self.plugin_config = PluginConfig.from_dict(config or {})
         self.cmd_parser = CommandParser()
         self.persona_manager = PersonaManager(self.plugin_config)
-        logger.info(f"{MessageEmoji.SUCCESS} 万象画卷 v3.0 加载完毕! (已启用动态图片捕获)")
 
     def _get_event_image(self, event: AstrMessageEvent) -> str:
-        """智能雷达：捕获用户当前消息中的图片作为动态参考"""
         for comp in event.message_obj.message:
             if isinstance(comp, Image):
                 path = getattr(comp, "path", getattr(comp, "file", None))
@@ -35,24 +33,36 @@ class OmniDrawPlugin(Star):
                 return path if (path and not path.startswith("http")) else url
         return ""
 
+    # ==========================================
+    # 🛡️ 新增：权限校验守卫
+    # ==========================================
+    def _has_permission(self, event: AstrMessageEvent) -> bool:
+        """检查用户是否有权限使用生图功能"""
+        allowed = self.plugin_config.allowed_users
+        # 如果白名单为空，默认全员开放
+        if not allowed:
+            return True
+            
+        sender_id = str(event.get_sender_id())
+        if sender_id in allowed:
+            return True
+            
+        logger.warning(f"🚫 拦截无权限用户调用生图: {sender_id}")
+        return False
+
     @filter.command("万象帮助")
     @handle_errors
     async def cmd_help(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
-        help_text = f"""📖 万象画卷 v3.0 帮助
-━━━━━━━━━━━━
-🎨 核心作画:
-/画 [提示词] [带上一张图片可做参考]
-
-🤳 助理自拍 ({self.plugin_config.persona_name}):
-/自拍 [动作描述] [发张图片让我穿同款]
-
-🤖 智能召唤:
-日常聊天提及看看你、发自拍时，大模型将自动执行。"""
+        help_text = "📖 万象画卷 v3.1 帮助\n/画 [提示词]\n/自拍 [动作描述]"
         yield event.plain_result(help_text)
 
     @filter.command("画")
     @handle_errors
     async def cmd_draw(self, event: AstrMessageEvent, message: str = "") -> AsyncGenerator[Any, None]:
+        if not self._has_permission(event):
+            yield event.plain_result(f"{MessageEmoji.WARNING} 抱歉，您暂无画图功能的使用权限哦！")
+            return
+
         message = message.strip()
         user_ref = self._get_event_image(event)
         
@@ -65,74 +75,58 @@ class OmniDrawPlugin(Star):
             kwargs["user_ref"] = user_ref
             
         yield event.plain_result(f"{MessageEmoji.PAINTING} 收到灵感，正在绘制...")
-        
         async with aiohttp.ClientSession() as session:
             chain_manager = ChainManager(self.plugin_config, session)
             image_url = await chain_manager.run_chain("text2img", prompt, **kwargs)
-            
-        yield event.chain_result([
-            Image.fromURL(image_url),
-            Plain(f"\n{MessageEmoji.SUCCESS} 画好啦！")
-        ])
+        yield event.chain_result([Image.fromURL(image_url)])
 
     @filter.command("自拍")
     @handle_errors
     async def cmd_selfie(self, event: AstrMessageEvent, message: str = "") -> AsyncGenerator[Any, None]:
+        if not self._has_permission(event):
+            yield event.plain_result(f"{MessageEmoji.WARNING} 抱歉，您暂无自拍功能的使用权限哦！")
+            return
+
         user_input = message.strip() if message else "看着镜头微笑"
         final_prompt, extra_kwargs = self.persona_manager.build_persona_prompt(user_input)
         
-        # 捕获用户在聊天中发来的衣服/姿势图
         user_ref = self._get_event_image(event)
         if user_ref:
             extra_kwargs["user_ref"] = user_ref
-            logger.info("👕 检测到用户发送了动态参考图，已注入！")
-        
+            
         yield event.plain_result(f"{MessageEmoji.INFO} 正在为「{self.plugin_config.persona_name}」生成自拍...")
-
         chain_to_use = "selfie" if "selfie" in self.plugin_config.chains else "text2img"
         async with aiohttp.ClientSession() as session:
             chain_manager = ChainManager(self.plugin_config, session)
             image_url = await chain_manager.run_chain(chain_to_use, final_prompt, **extra_kwargs)
-            
         yield event.chain_result([Image.fromURL(image_url)])
 
-    @llm_tool(name="generate_selfie", description="以此 AI 助理（我）的固定人设和参考形象拍摄一张自拍或人像照片。当用户想看我、看腿、发照片时必须调用。传入的 action 必须是你根据上下文生成的动作场景描述。")
+    @llm_tool(name="generate_selfie", description="以此 AI 助理（我）的固定人设拍摄自拍。")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str) -> AsyncGenerator[Any, None]:
-        """
-        供大模型调用的自拍工具。
-        
-        Args:
-            action (string): 动作和场景描述。必须是你根据上下文扩写并翻译成英文的高质量提示词，包含动作、表情、服装、环境等细节。
-        """
-        logger.info(f"🧠 [LLM Tool] 触发智能自拍！描述: {action}")
+        if not self._has_permission(event):
+            yield event.plain_result(f"{MessageEmoji.WARNING} 抱歉，您的账号没有让我自拍的权限哦~")
+            return
+
         try:
             final_prompt, extra_kwargs = self.persona_manager.build_persona_prompt(action)
-            
-            # 尝试捕获上下文中用户刚发的图片
             user_ref = self._get_event_image(event)
             if user_ref:
                 extra_kwargs["user_ref"] = user_ref
-            
+                
             chain_to_use = "selfie" if "selfie" in self.plugin_config.chains else "text2img"
-            
             async with aiohttp.ClientSession() as session:
                 chain_manager = ChainManager(self.plugin_config, session)
                 image_url = await chain_manager.run_chain(chain_to_use, final_prompt, **extra_kwargs)
-                
             yield event.chain_result([Image.fromURL(image_url)])
         except Exception as e:
-            logger.error(f"❌ [LLM Tool] 自拍失败: {e}", exc_info=True)
             yield event.plain_result(f"{MessageEmoji.ERROR} 画笔坏了：{str(e)}")
 
     @llm_tool(name="generate_image", description="AI 画图工具。当用户提出明确的画面要求你画出来时调用此工具。")
     async def tool_generate_image(self, event: AstrMessageEvent, prompt: str) -> AsyncGenerator[Any, None]:
-        """
-        供大模型调用的画图接口。
-        
-        Args:
-            prompt (string): 扩写成英文的高质量正向提示词。必须包含画面主体、环境、光影、画风等丰富细节。
-        """
-        logger.info(f"🧠 [LLM Tool] 触发画图！描述: {prompt}")
+        if not self._has_permission(event):
+            yield event.plain_result(f"{MessageEmoji.WARNING} 抱歉，我目前不能为您画图，权限不足。")
+            return
+
         try:
             yield event.plain_result(f"{MessageEmoji.PAINTING} 好的，马上为你作画...")
             kwargs = {}
@@ -143,7 +137,6 @@ class OmniDrawPlugin(Star):
             async with aiohttp.ClientSession() as session:
                 chain_manager = ChainManager(self.plugin_config, session)
                 image_url = await chain_manager.run_chain("text2img", prompt, **kwargs)
-            yield event.chain_result([Image.fromURL(image_url), Plain(f"\n{MessageEmoji.SUCCESS} 画好啦！")])
+            yield event.chain_result([Image.fromURL(image_url)])
         except Exception as e:
-            logger.error(f"❌ [LLM Tool] 画图失败: {e}", exc_info=True)
             yield event.plain_result(f"{MessageEmoji.ERROR} 画笔坏了：{str(e)}")

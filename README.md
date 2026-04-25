@@ -1,5 +1,6 @@
-# 🌌 万象画卷 (OmniDraw)
+# 🌌 万象画卷 (OmniDraw)————astrbot_plugin_omnidraw
 **—— 重新定义大模型助理的视觉交互边界**
+
 
 [![Version](https://img.shields.io/badge/Version-3.1.0-blue.svg)](#) [![Framework](https://img.shields.io/badge/Framework-AstrBot-green.svg)](#) [![Architecture](https://img.shields.io/badge/Architecture-Bulletproof-red.svg)](#)
 
@@ -73,3 +74,22 @@
 ---
 
 **万象画卷 ** —— 不仅仅是一个画图插件，它是赋予你的 AI 助理一具**看得见、摸得着、换得了衣服**的唯美数字肉身。
+
+---
+
+## 🙏 特别鸣谢 (Special Thanks)
+
+本插件的诞生与终极进化，离不开开源社区中各位大佬的无私奉献与灵感启发。站在这群巨人的肩膀上，才有了如今极简、稳定而强大的“万象画卷”。
+
+特别感谢以下项目及开发者（排名不分先后）：
+
+* **[AstrBot](https://github.com/Soulter/AstrBot)** 感谢 Soulter 及所有贡献者打造的这款极致优雅、扩展性极强的多平台机器人框架，为万象画卷提供了坚实、无缝的底层土壤与强大的 LLM 工具链支持。
+
+* **[astrbot_plugin_shoubanhua](https://github.com/shskjw/astrbot_plugin_shoubanhua)** 感谢该项目作者！本作中惊艳的“双轨视觉控制”——即在聊天中实时动态捕获用户发送的图片作为姿势参考，这一核心交互逻辑正是汲取了该项目对于 AstrBot 消息事件流深度解析的优秀经验。
+
+* **[astrbot_plugin_gitee_aiimg](https://github.com/muyouzhi6/astrbot_plugin_gitee_aiimg)** 致谢作者的代码指引！正是在研读该项目后，万象画卷才如梦初醒，彻底破解了 OpenAI 标准 API 接口中 `multipart/form-data` 传输图生图请求的硬核规范，并且完美解决了 WebUI 隔离文件池 (`plugin_data`) 的绝对路径寻址难题。
+
+* **[astrbot_plugin_big_banana](https://github.com/sukafon/astrbot_plugin_big_banana)** 感谢该项目在底层架构设计、模型节点（Banana 生态）适配以及复杂网络接口代理兼容性上提供的绝佳代码范例，为万象画卷的“防弹级 API 路由系统”提供了重要的底层构建参考。
+
+> 💡 **“开源精神永存，致敬每一位在代码世界里披荆斩棘的先行者！”**
+

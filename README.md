@@ -1,4 +1,4 @@
-# 🌌 万象画卷 (OmniDraw)————astrbot_plugin_omnidraw
+# 🌌 万象画卷 (OmniDraw)——astrbot_plugin_omnidraw
 **—— 重新定义大模型助理的视觉交互边界**
 
 

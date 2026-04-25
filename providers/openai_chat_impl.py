@@ -71,21 +71,21 @@ class OpenAIChatProvider(BaseProvider):
         base_url = self.config.base_url.rstrip("/")
         url = f"{base_url}/v1/chat/completions" if not base_url.endswith("/v1") else f"{base_url}/chat/completions"
         
-        # --- 阶段 1：请求前日志查岗 ---
+       阶段 1：请求前日志查岗
         logger.info(f"[{self.config.id}] 📡 发起请求 -> URL: {url}")
         logger.info(f"[{self.config.id}] 🔑 使用凭证 -> Bearer {safe_key}")
         
-        # 为了防止 Base64 这种超长的乱码刷爆你的控制台，做个友好的脱敏打印
         payload_for_log = json.loads(json.dumps(payload))
         if b64_image:
             payload_for_log["messages"][1]["content"][1]["image_url"]["url"] = "data:image/png;base64, [已为您省略超长字符串...]"
         logger.debug(f"[{self.config.id}] 📦 Payload -> {json.dumps(payload_for_log, ensure_ascii=False)}")
         
-        timeout_obj = aiohttp.ClientTimeout(total=API_TIMEOUT_VISION if b64_image else API_TIMEOUT_DEFAULT)
+        # 【关键修改】：不再使用写死的常量，直接从你的 WebUI 配置里读取超时时间！
+        timeout_obj = aiohttp.ClientTimeout(total=self.config.timeout)
+        logger.info(f"[{self.config.id}] ⏳ 当前节点设置的超时时间为: {self.config.timeout} 秒")
         
         async with self.session.post(url, json=payload, headers=headers, timeout=timeout_obj) as response:
             status = response.status
-            logger.info(f"[{self.config.id}] 📥 收到响应状态码: {status}")
             
             # --- 阶段 2：请求后验尸 ---
             if status != 200:

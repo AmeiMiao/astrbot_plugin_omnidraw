@@ -1,5 +1,5 @@
 """
-AstrBot 万象画卷插件 v1.7.0 - 数据模型
+AstrBot 万象画卷插件 v1.7.1 - 数据模型 (终极图库兼容版)
 """
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
@@ -18,14 +18,14 @@ class ProviderConfig:
 class PersonaConfig:
     name: str
     base_prompt: str = ""
-    ref_image_name: str = "" # 改为 name，接收文件名
+    ref_image_name: str = "" 
 
 @dataclass
 class PluginConfig:
     providers: List[ProviderConfig] = field(default_factory=list)
     chains: Dict[str, List[str]] = field(default_factory=dict)
     personas: List[PersonaConfig] = field(default_factory=list)
-    ref_images_pool: List[str] = field(default_factory=list) # 新增：接收全局图库的绝对路径列表
+    ref_images_pool: List[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "PluginConfig":
@@ -57,10 +57,21 @@ class PluginConfig:
             for p in personas_data if p.get("name")
         ]
         
-        # 提取 WebUI 上传后生成的绝对路径列表
-        pool = config_dict.get("ref_images_pool", [])
-        if not isinstance(pool, list):
-            pool = []
+        # 【核心修复】：防弹级提取 WebUI 上传组件的数据
+        raw_pool = config_dict.get("ref_images_pool", [])
+        pool = []
+        if isinstance(raw_pool, str) and raw_pool.strip():
+            # 兼容：如果 AstrBot 传过来的是一个单纯的路径字符串
+            pool = [raw_pool.strip()]
+        elif isinstance(raw_pool, list):
+            for item in raw_pool:
+                if isinstance(item, str):
+                    pool.append(item)
+                elif isinstance(item, dict):
+                    # 兼容：如果 AstrBot 传过来的是一个字典列表 [{"path": "..."}]
+                    path = item.get("path") or item.get("url") or item.get("file")
+                    if path:
+                        pool.append(str(path))
 
         return cls(providers=providers, chains=chains, personas=personas, ref_images_pool=pool)
 

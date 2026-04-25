@@ -1,6 +1,6 @@
 """
 AstrBot 万象画卷插件 v3.1
-功能：QQ号白名单 + 大模型自然语言回复前置 (Markdown图片融合)
+功能：修复 SyntaxError，将工具彻底改造为返回纯文本给 LLM 处理
 """
 import os
 import base64
@@ -47,7 +47,7 @@ class OmniDrawPlugin(Star):
         return False
 
     # ==========================================
-    # 常规指令区 (直接发图，不经过大模型闲聊)
+    # 常规指令区 (保持使用 yield 直接发消息)
     # ==========================================
     @filter.command("万象帮助")
     @handle_errors
@@ -101,29 +101,26 @@ class OmniDrawPlugin(Star):
         yield event.chain_result([Image.fromURL(image_url)])
 
     # ==========================================
-    # 🤖 LLM 工具区 (拦截发图动作，移交大模型回复)
+    # 🤖 LLM 工具区 (纯函数返回，移除所有 yield)
     # ==========================================
     def _save_base64_to_temp(self, b64_url: str) -> str:
-        """核心组件：将 Base64 转化为本地文件，以便 Markdown 解析"""
         b64_data = b64_url.split(",", 1)[1]
         save_dir = os.path.abspath(os.path.join(os.getcwd(), "data", "plugin_data", "astrbot_plugin_omnidraw", "temp_images"))
         os.makedirs(save_dir, exist_ok=True)
         file_path = os.path.join(save_dir, f"img_{uuid.uuid4().hex[:8]}.png")
         with open(file_path, "wb") as f:
             f.write(base64.b64decode(b64_data))
-        # 将反斜杠替换为正斜杠，防止 Markdown 转义失效
         return file_path.replace("\\", "/")
 
     @llm_tool(name="generate_selfie")
-    async def tool_generate_selfie(self, event: AstrMessageEvent, action: str) -> AsyncGenerator[Any, None]:
+    async def tool_generate_selfie(self, event: AstrMessageEvent, action: str) -> str:
         """
         以此 AI 助理（我）的固定人设拍摄自拍。
         Args:
             action (string): 动作和场景描述。纯动作描述即可，无需包含人物长相特征。
         """
         if not self._has_permission(event):
-            yield event.plain_result(f"{MessageEmoji.WARNING} 抱歉，您的账号没有让我自拍的权限哦~")
-            return
+            return "系统提示：当前用户没有权限使用自拍功能，请你委婉地拒绝他。"
 
         try:
             final_prompt, extra_kwargs = self.persona_manager.build_persona_prompt(action)
@@ -136,29 +133,25 @@ class OmniDrawPlugin(Star):
                 chain_manager = ChainManager(self.plugin_config, session)
                 image_url = await chain_manager.run_chain(chain_to_use, final_prompt, **extra_kwargs)
             
-            # 1. 临时保存并获取路径
             if image_url.startswith("data:image"):
                 image_url = self._save_base64_to_temp(image_url)
 
-            # 2. 不直接发送！而是作为系统提示词退给大模型，让大模型把它说出来！
             return f"自拍成功！图片路径：{image_url} \n请你现在立刻用符合你人设的自然语气回复用户，并且必须在你的回复内容的最后面，附上这句 Markdown 代码来发图：![image]({image_url})"
             
         except Exception as e:
-            yield event.plain_result(f"{MessageEmoji.ERROR} 画笔坏了：{str(e)}")
+            return f"系统提示：画图引擎发生了错误 ({str(e)})。请向用户道歉，并说明你的画笔坏了。"
 
     @llm_tool(name="generate_image")
-    async def tool_generate_image(self, event: AstrMessageEvent, prompt: str) -> AsyncGenerator[Any, None]:
+    async def tool_generate_image(self, event: AstrMessageEvent, prompt: str) -> str:
         """
         AI 画图工具。当用户提出明确的画面要求你画出来时调用此工具。
         Args:
             prompt (string): 扩写成英文的高质量动作与场景提示词。
         """
         if not self._has_permission(event):
-            yield event.plain_result(f"{MessageEmoji.WARNING} 抱歉，我目前不能为您画图，权限不足。")
-            return
+            return "系统提示：当前用户没有权限使用画图功能，请你委婉地拒绝他。"
 
         try:
-            # 隐藏了以前会立刻弹出的 "好的马上作画..."，让全程更自然无感
             kwargs = {}
             user_ref = self._get_event_image(event)
             if user_ref:
@@ -168,12 +161,10 @@ class OmniDrawPlugin(Star):
                 chain_manager = ChainManager(self.plugin_config, session)
                 image_url = await chain_manager.run_chain("text2img", prompt, **kwargs)
 
-            # 1. 临时保存并获取路径
             if image_url.startswith("data:image"):
                 image_url = self._save_base64_to_temp(image_url)
 
-            # 2. 移交大模型回复
             return f"画图任务成功！图片路径：{image_url} \n请你现在立刻回复用户，并且必须在你的回复内容的最后面，附上这句 Markdown 代码来展示你画好的图：![image]({image_url})"
 
         except Exception as e:
-            yield event.plain_result(f"{MessageEmoji.ERROR} 画笔坏了：{str(e)}")
+            return f"系统提示：画图引擎发生了错误 ({str(e)})。请向用户道歉，并说明你的画笔坏了。"

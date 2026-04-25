@@ -1,6 +1,6 @@
 """
 AstrBot 万象画卷插件 v3.1 - OpenAI 标准实现 (满级防弹版)
-破解失效之谜：严格遵循 multipart/form-data 规范进行改图
+修复：同步强化网络图片的本地拦截下载机制，增加防盗链伪装，确保表单直传万无一失
 """
 import aiohttp
 import json
@@ -21,9 +21,18 @@ except ImportError:
 class OpenAIProvider(BaseProvider):
 
     async def _get_image_bytes(self, image_path_or_url: str) -> bytes:
+        """强化版：获取图片的真实二进制数据，自带伪装头，无视防盗链"""
         if image_path_or_url.startswith("http"):
-            async with self.session.get(image_path_or_url) as resp:
-                return await resp.read()
+            logger.info("📥 [标准通道] 正在本地内存中拦截并下载网络参考图...")
+            # 增加伪装请求头，防止被腾讯/微信等平台的防爬虫机制拦截
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            }
+            async with self.session.get(image_path_or_url, headers=headers) as resp:
+                if resp.status == 200:
+                    return await resp.read()
+                else:
+                    raise RuntimeError(f"拦截下载网络图片失败，服务器返回状态码: {resp.status}")
         else:
             with open(image_path_or_url, "rb") as f:
                 return f.read()
@@ -37,10 +46,14 @@ class OpenAIProvider(BaseProvider):
         ref_image = kwargs.get("user_ref") or kwargs.get("persona_ref")
 
         if ref_image:
+            # ==========================================
+            # 🖼️ 图生图模式 (Image-to-Image / Edits)
+            # ==========================================
             url = base_url + "/images/edits"
             logger.info("✅ 检测到参考图，正切换至标准改图通道: " + url)
             
             try:
+                # 在这里触发本地拦截下载
                 image_bytes = await self._get_image_bytes(ref_image)
             except Exception as e:
                 raise RuntimeError("读取参考图数据失败: " + str(e))
@@ -57,6 +70,9 @@ class OpenAIProvider(BaseProvider):
                 return await self._parse_response(response, base_url)
                 
         else:
+            # ==========================================
+            # 🎨 文生图模式 (Text-to-Image / Generations)
+            # ==========================================
             url = base_url + "/images/generations"
             payload = {"model": self.config.model, "prompt": prompt, "n": 1}
             headers = {"Content-Type": "application/json", "Authorization": "Bearer " + current_key}

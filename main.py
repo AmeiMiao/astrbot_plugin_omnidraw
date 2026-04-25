@@ -53,7 +53,7 @@ class OmniDrawPlugin(Star):
     @handle_errors
     async def cmd_help(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
         """查看帮助"""
-        help_text = f"""📖 万象画卷帮助 v1.0.0
+        help_text = """📖 万象画卷帮助 v1.0.0
 ━━━━━━━━━━━━
 🎨 核心指令:
 /画 [提示词] - 基础作画
@@ -65,18 +65,18 @@ class OmniDrawPlugin(Star):
 """
         yield event.plain_result(help_text)
 
+    # 【关键修复】去掉了 *args，改用 message: str = "" 获取全部剩余文本
     @filter.command("画")
     @handle_errors
-    async def cmd_draw(self, event: AstrMessageEvent, *args) -> AsyncGenerator[Any, None]:
+    async def cmd_draw(self, event: AstrMessageEvent, message: str = "") -> AsyncGenerator[Any, None]:
         """基础画图指令"""
-        if not args:
+        message = message.strip()
+        if not message:
             yield event.plain_result(f"{MessageEmoji.WARNING} 请输入提示词，例如：/画 一只猫")
             return
-
-        raw_input = " ".join(args)
         
         # 分离文本与高级参数
-        prompt, kwargs = self.cmd_parser.parse(raw_input)
+        prompt, kwargs = self.cmd_parser.parse(message)
         
         yield event.plain_result(f"{MessageEmoji.PAINTING} 收到灵感，正在绘制，请稍候...")
 
@@ -88,10 +88,12 @@ class OmniDrawPlugin(Star):
             Plain(f"\n{MessageEmoji.SUCCESS} 画好啦！\n提示词: {prompt}")
         ])
 
+    # 【关键修复】去掉了 *args，改用具体参数接收
     @filter.command("自拍")
     @handle_errors
-    async def cmd_selfie(self, event: AstrMessageEvent, persona_name: str = None, *args) -> AsyncGenerator[Any, None]:
+    async def cmd_selfie(self, event: AstrMessageEvent, persona_name: str = "", message: str = "") -> AsyncGenerator[Any, None]:
         """人设自拍模式"""
+        persona_name = persona_name.strip()
         if not persona_name:
             # 如果没提供名字，列出所有可用人设
             available = [p.name for p in self.plugin_config.personas]
@@ -103,7 +105,8 @@ class OmniDrawPlugin(Star):
             yield event.plain_result(f"{MessageEmoji.ERROR} 未找到名为「{persona_name}」的人设！")
             return
 
-        user_input = " ".join(args) if args else "看着镜头微笑"
+        message = message.strip()
+        user_input = message if message else "看着镜头微笑"
         
         # 组装 Prompt
         final_prompt, extra_kwargs = self.persona_manager.build_persona_prompt(persona, user_input)

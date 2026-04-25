@@ -1,5 +1,6 @@
 """
-AstrBot 万象画卷插件 v3.0 - 数据模型
+AstrBot 万象画卷插件 v3.1 - 数据模型
+修复：兼容 WebUI file 组件返回 List 格式导致的参考图静默丢失问题
 """
 import os
 from dataclasses import dataclass, field
@@ -35,9 +36,16 @@ class PluginConfig:
             ) for p in config_dict.get("providers", [])
         ]
         
-        # 提取 WebUI 上传的文件路径
+        # ==========================================
+        # 🛠️ 核心修复：防弹级提取 WebUI 参考图路径
+        # ==========================================
         raw_image = config_dict.get("persona_ref_image", "")
         ref_path = ""
+        
+        # 兼容 AstrBot 会把单文件包装成列表传过来的情况
+        if isinstance(raw_image, list) and len(raw_image) > 0:
+            raw_image = raw_image[0]
+            
         if isinstance(raw_image, dict):
             ref_path = raw_image.get("path") or raw_image.get("url") or raw_image.get("file") or ""
         elif isinstance(raw_image, str):

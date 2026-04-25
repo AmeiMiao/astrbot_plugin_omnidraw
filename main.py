@@ -77,13 +77,12 @@ class OmniDrawPlugin(Star):
         yield event.plain_result(help_text)
 
     # ==========================================
-    # 🌟 指令：本地上传参考图文件
+    # 🌟 指令：本地上传/下载参考图文件
     # ==========================================
     @filter.command("设置人设图片")
+    @handle_errors
     async def cmd_set_persona_image(self, event: AstrMessageEvent, persona_name: str = "") -> AsyncGenerator[Any, None]:
-        """使用指令上传本地图片作为人设参考图
-        用法: /设置人设图片 默认人设 [在下一条消息或本条中发送图片]
-        """
+        """使用指令上传本地/网络图片作为人设参考图"""
         persona_name = persona_name.strip()
         if not persona_name:
             available = [p.name for p in self.plugin_config.personas]
@@ -101,68 +100,72 @@ class OmniDrawPlugin(Star):
             yield event.plain_result(f"{MessageEmoji.ERROR} 未找到名为「{persona_name}」的人设！")
             return
 
-        # 2. 从 event 获取图片组件
-        images = event.get_messages_by_type(Image)
+        # 2. 【关键修复】兼容 AstrBot 标准组件提取方式
+        # 遍历整条消息链，找出属于 Image 类的组件
+        images = [comp for comp in event.message_obj.message if isinstance(comp, Image)]
+        
         if not images:
-            yield event.plain_result(f"{MessageEmoji.WARNING} 请在指令中附带图片，或引用包含图片的上文。")
+            yield event.plain_result(f"{MessageEmoji.WARNING} 请在发送指令的同时附带一张图片！")
             return
         
         image_component = images[0]
-        # 尝试获取文件名和数据，如果不支持可能会比较麻烦，取决于 AstrBot 组件结构
-        # 这里假设框架已经将图片下载下来或者提供了文件名/绝对路径
-        # 许多 AstrBot 组件返回的是一个本地临时文件的 path
-        
-        source_path = getattr(image_component, "path", None)
-        if not source_path or not os.path.exists(source_path):
-            # 如果没有本地 path，可能只给了 URL，这里为了不机械，我们不支持通过指令下载网络URL作为本地，请用户用 WebUI 填入URL
-            yield event.plain_result(f"{MessageEmoji.ERROR} 无法从当前消息中获取可保存的本地图片文件路径。")
-            return
+        # 获取图片的真实来源 (有的适配器用 url，有的用 path/file)
+        img_url = getattr(image_component, "url", None)
+        img_path = getattr(image_component, "path", getattr(image_component, "file", None))
 
-        yield event.plain_result(f"{MessageEmoji.INFO} 正在为人设「{persona_name}」保存并更新参考图文件...")
+        yield event.plain_result(f"{MessageEmoji.INFO} 正在为人设「{persona_name}」处理参考图，请稍候...")
 
-        # 3. 将图片复制到我们的专用目录
-        file_ext = os.path.splitext(source_path)[1] or ".png"
+        # 3. 确定保存路径
+        file_ext = ".png" # 默认存为 png
         safe_persona_id = "".join([c for c in persona_name if c.isalpha() or c.isdigit()]).rstrip() or "persona"
         final_save_name = f"{safe_persona_id}{file_ext}"
         final_save_path = os.path.join(PERSONA_IMAGES_DIR, final_save_name)
 
-        import shutil
+        # 4. 【关键修复】处理下载或复制逻辑
         try:
-            # 使用复制而不是移动，防止原组件异常
-            shutil.copy2(source_path, final_save_path)
-            logger.info(f"✅ 人设图片已保存到本地: {final_save_path}")
+            if img_url:
+                # 如果是 QQ 等平台传来的网络 URL，使用 aiohttp 下载
+                logger.info(f"正在从网络下载图片: {img_url}")
+                async with self._session.get(img_url) as resp:
+                    if resp.status == 200:
+                        with open(final_save_path, "wb") as f:
+                            f.write(await resp.read())
+                        logger.info(f"✅ 图片下载并保存成功: {final_save_path}")
+                    else:
+                        yield event.plain_result(f"{MessageEmoji.ERROR} 下载图片失败，网络状态码: {resp.status}")
+                        return
+            elif img_path and os.path.exists(img_path):
+                # 如果是本地路径，直接复制
+                import shutil
+                shutil.copy2(img_path, final_save_path)
+                logger.info(f"✅ 从本地缓存复制图片成功: {final_save_path}")
+            else:
+                yield event.plain_result(f"{MessageEmoji.ERROR} 无法获取该图片的有效路径或链接。")
+                return
         except Exception as e:
-            logger.error(f"❌ 保存本地图片失败: {e}")
+            logger.error(f"❌ 处理图片文件失败: {e}")
             yield event.plain_result(f"{MessageEmoji.ERROR} 保存文件失败: {e}")
             return
 
-        # 4. 【关键步骤】动态更新原始配置并持久化保存
+        # 5. 动态更新原始配置并持久化保存
         try:
             personas_list = self.current_raw_config.get("personas", [])
-            # 找到对应人设在列表里的索引并修改
-            for i, p in enumerate(personas_list):
+            for p in personas_list:
                 if p.get("name") == persona_name:
                     p["ref_image_url"] = final_save_path # 填入我们的本地绝对路径
                     break
             
-            # 这里的 save 方法取决于 Star 类如何获取 ConfigManager
-            # 不同的 AstrBot 版本实现可能不同。如果 Star 类本身不支持直接 save config
-            # 可能需要调用 self.context.config_manager.update_config(...)
-            # 假设有一个 self.context.save_plugin_config(config_dict) 或者 self.save_config() 的方法
-            # 根据 AstrBot 文档，你可以通过 self.context.save_plugin_config() 保存。
-            
-            # 先同步到我们的内存模型
+            # 同步内存模型并重载管理器
             self.plugin_config = PluginConfig.from_dict(self.current_raw_config)
-            # 刷新 persona_manager
             self.persona_manager = PersonaManager(self.plugin_config)
             
-            # 如果 Star 支持这个方法的话 ( AstrBot 3.0+ 推荐玩法)
+            # 持久化写入 config.yaml / db
             await self.context.save_plugin_config(self.current_raw_config)
             
-            yield event.plain_result(f"{MessageEmoji.SUCCESS} 人设「{persona_name}」参考图已成功设置为本地文件！")
+            yield event.plain_result(f"{MessageEmoji.SUCCESS} 人设「{persona_name}」参考图已成功更新！")
         except Exception as e:
             logger.error(f"❌ 动态更新配置持久化失败: {e}")
-            yield event.plain_result(f"{MessageEmoji.WARNING} 图片已保存，但在配置中持久化保存失败。插件重启前有效。错误: {e}")
+            yield event.plain_result(f"{MessageEmoji.WARNING} 图片已保存，但在配置中写入失败。插件重启前有效。错误: {e}")
 
     # ==========================================
     # 🌟 标准画图指令（无参数报错修复）

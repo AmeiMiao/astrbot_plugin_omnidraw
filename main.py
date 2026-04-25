@@ -49,19 +49,49 @@ class OmniDrawPlugin(Star):
             await self._session.close()
             logger.info("全局 aiohttp Session 已安全关闭")
 
+    @filter.command("切模型")
+        @handle_errors
+        async def cmd_switch_model(self, event: AstrMessageEvent, provider_id: str = "", new_model: str = "") -> AsyncGenerator[Any, None]:
+            """动态切换指定节点的模型
+            用法: /切模型 main_node gpt-4o
+            """
+            provider_id = provider_id.strip()
+            new_model = new_model.strip()
+    
+            if not provider_id or not new_model:
+                # 列出当前所有节点及其模型
+                info = "当前节点列表:\n"
+                for p in self.plugin_config.providers:
+                    info += f"• [{p.id}]: {p.model}\n"
+                yield event.plain_result(f"{info}\n用法: /切模型 [节点ID] [新模型名]")
+                return
+    
+            provider = self.plugin_config.get_provider(provider_id)
+            if not provider:
+                yield event.plain_result(f"{MessageEmoji.ERROR} 未找到节点: {provider_id}")
+                return
+    
+            # 动态修改内存中的配置
+            old_model = provider.model
+            provider.model = new_model
+            
+            logger.info(f"👤 用户 {event.get_sender_id()} 将节点 {provider_id} 的模型从 {old_model} 切换为 {new_model}")
+            yield event.plain_result(f"{MessageEmoji.SUCCESS} 节点 [{provider_id}] 模型已切换: {old_model} ➔ {new_model}")
+
     @filter.command("万象帮助")
     @handle_errors
     async def cmd_help(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
-        """查看帮助"""
-        help_text = """📖 万象画卷帮助 v1.0.0
+        help_text = f"""📖 万象画卷 v1.1.0 帮助
 ━━━━━━━━━━━━
 🎨 核心指令:
-/画 [提示词] - 基础作画
-/自拍 [人设名] [动作] - 以预设人设作画
+/画 [提示词] [--参数]
+/自拍 [人设名] [动作]
 
-💡 高级参数:
-支持在提示词中附加 --参数名 参数值
-例如: /画 一只猫 --ar 16:9 --size 1024x1024
+⚙️ 管理指令:
+/切模型 [节点ID] [模型名] - 动态换模型
+/万象状态 - 查看节点及密钥轮询状态
+
+💡 提示: 密钥已支持自动轮询，可在WebUI一行一个填入。
 """
         yield event.plain_result(help_text)
 

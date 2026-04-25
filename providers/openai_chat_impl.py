@@ -1,6 +1,6 @@
 """
-AstrBot 万象画卷插件 v3.1 - OpenAI Chat 兼容实现 (满级防弹版)
-修复：动态拦截并本地化网络图片，破解平台防盗链导致大模型无法读取图片的问题
+AstrBot 万象画卷插件 v3.1 - OpenAI Chat 兼容实现
+功能：保留防盗链拦截 + 最终提示词日志打印，剥离复杂的双图反转与标签逻辑
 """
 import aiohttp
 import re
@@ -23,24 +23,21 @@ except ImportError:
 class OpenAIChatProvider(BaseProvider):
 
     async def _encode_image_to_base64(self, image_path_or_url: str) -> str:
-        """统一将本地路径或网络URL转化为 Base64，彻底切断对外部大模型网关下载图片的依赖"""
+        """拦截网络图片下载，对抗防盗链"""
         try:
             if image_path_or_url.startswith("http"):
-                # 🚀 核心修复：遇到网络图片，插件自己先在本地下载到内存里！
-                logger.info(f"📥 正在本地内存中拦截并下载网络参考图...")
-                async with self.session.get(image_path_or_url) as resp:
+                logger.info("📥 正在本地内存中拦截并下载网络参考图...")
+                headers = {"User-Agent": "Mozilla/5.0"}
+                async with self.session.get(image_path_or_url, headers=headers) as resp:
                     if resp.status == 200:
                         image_bytes = await resp.read()
-                        b64_data = base64.b64encode(image_bytes).decode('utf-8')
-                        return "data:image/png;base64," + b64_data
+                        return "data:image/png;base64," + base64.b64encode(image_bytes).decode('utf-8')
                     else:
                         logger.error(f"下载网络图片失败，状态码: {resp.status}")
                         return ""
             else:
-                # 本地图片处理逻辑保持不变
                 with open(image_path_or_url, "rb") as f:
-                    b64_data = base64.b64encode(f.read()).decode('utf-8')
-                    return "data:image/png;base64," + b64_data
+                    return "data:image/png;base64," + base64.b64encode(f.read()).decode('utf-8')
         except Exception as e:
             logger.error("读取或下载参考图失败: " + str(e))
             return ""
@@ -53,9 +50,15 @@ class OpenAIChatProvider(BaseProvider):
         persona_ref = kwargs.get("persona_ref")
         user_ref = kwargs.get("user_ref")
 
+        # ==========================================
+        # 📝 保留：打印最终发送给 API 的提示词内容
+        # ==========================================
+        logger.info(f"📝 [Chat/Vision通道] 最终发送给 API 的核心提示词:\n{prompt}")
+
+        # 恢复最纯粹的基础结构：文字置顶
         user_content = [{"type": "text", "text": prompt}]
 
-        # 视觉通道：注入参考图 (现在网络图和本地图都会被强制转化为 Base64 本地数据)
+        # 恢复默认顺序：先传人设图，再传用户图（无多余标签）
         if persona_ref:
             b64_persona = await self._encode_image_to_base64(persona_ref)
             if b64_persona:
@@ -68,6 +71,7 @@ class OpenAIChatProvider(BaseProvider):
                 user_content.append({"type": "image_url", "image_url": {"url": b64_user}})
                 logger.info("✅ [Chat/Vision] 成功将【动态姿势图】转化为视觉信号注入对话")
 
+        # 如果只有纯文本，退化为字符串
         if len(user_content) == 1:
             user_content = prompt
 
@@ -93,30 +97,21 @@ class OpenAIChatProvider(BaseProvider):
         base_url = self.config.base_url.rstrip("/")
         url = base_url + "/v1/chat/completions" if not base_url.endswith("/v1") else base_url + "/chat/completions"
         
-        logger.info("📡 发起 Vision 请求 -> URL: " + url)
-        
         timeout_obj = aiohttp.ClientTimeout(total=self.config.timeout)
-        
         async with self.session.post(url, json=payload, headers=headers, timeout=timeout_obj) as response:
             status = response.status
             if status != 200:
                 error_text = await response.text()
-                logger.error("💥 API 返回错误:\n" + error_text)
                 raise RuntimeError("HTTP " + str(status) + ": " + error_text)
             
             result = await response.json()
-            
             if "choices" in result and len(result["choices"]) > 0:
                 content = result["choices"][0]["message"]["content"].strip()
-                logger.info("🤖 Chat模型回复原话: " + content)
-                
                 match = re.search(r'!\[.*?\]\((.*?)\)', content)
                 if match:
                     return match.group(1)
-                
                 if content.startswith("http") or content.startswith("data:image"):
                     return content
-                    
                 raise ValueError("Chat接口未返回有效图片链接。模型原话: " + content)
             else:
                 raise ValueError("API返回结构异常: " + str(result))

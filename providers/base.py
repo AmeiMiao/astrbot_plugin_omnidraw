@@ -3,7 +3,7 @@ AstrBot 万象画卷插件 v1.1.0 - Provider 基类
 """
 import aiohttp
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Dict  # <--- 关键修复：在这里加上了 Dict
 from ..models import ProviderConfig
 
 class BaseProvider(ABC):

@@ -3,7 +3,6 @@ AstrBot 万象画卷插件 v1.0.0
 
 功能描述：
 - OpenAI Chat 接口 (/v1/chat/completions) 出图实现
-- 适用于将生成图片转为 Markdown 链接返回的聚合网关大模型
 
 作者: your_name
 版本: 1.0.0
@@ -22,7 +21,7 @@ class OpenAIChatProvider(BaseProvider):
     """OpenAI 聊天接口出图支持"""
     
     async def generate_image(self, prompt: str, **kwargs: Any) -> str:
-        # Chat 接口专属的 Payload：通过 System Prompt 强制模型只返回 Markdown 图片
+        # 强制模型只返回 Markdown 图片链接
         payload = {
             "model": self.config.model,
             "messages": [
@@ -59,19 +58,18 @@ class OpenAIChatProvider(BaseProvider):
             
             result = await response.json()
             
-            # 解析大模型的回复文本
+            # 解析大模型的回复文本提取链接
             if "choices" in result and len(result["choices"]) > 0:
                 content = result["choices"][0]["message"]["content"].strip()
                 
-                # 正则表达式：提取 Markdown 里的 URL -> ![任意文字](提取这里的URL)
+                # 正则提取 Markdown URL: ![...](URL)
                 match = re.search(r'!\[.*?\]\((.*?)\)', content)
                 if match:
                     return match.group(1)
                 
-                # 如果没加 ![...]()，也许它乖巧地直接返回了纯 URL 或 Base64 数据
                 if content.startswith("http") or content.startswith("data:image"):
                     return content
                     
-                raise ValueError(f"Chat 接口未返回有效的图片格式链接。模型原话: {content}")
+                raise ValueError(f"Chat接口未返回有效图片链接。模型原话: {content}")
             else:
-                raise ValueError(f"API 返回的数据结构异常: {result}")
+                raise ValueError(f"API返回结构异常: {result}")

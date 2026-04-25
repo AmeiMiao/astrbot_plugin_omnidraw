@@ -250,7 +250,7 @@ class OmniDrawPlugin(Star):
         old_model = provider.model
         provider.model = new_model
         
-        yield event.plain_result(f"{MessageEmoji.SUCCESS} 节点 [{provider_id}] 模型已切换: {old_model} ➔ {new_model}")"""
+        yield event.plain_result(f"{MessageEmoji.SUCCESS} 节点 [{provider_id}] 模型已切换: {old_model} ➔ {new_model}")
 AstrBot 万象画卷插件 v1.3.0
 
 新增功能：

@@ -7,12 +7,19 @@ import uuid
 import time
 import aiohttp
 import asyncio
+import re
 from typing import AsyncGenerator, Any
 
 from astrbot.api.star import Context, Star, register, StarTools 
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.message_components import Image, Plain, Video
 from astrbot.api import logger, llm_tool 
+
+# 🚀 引入正确的事件类型，完美兼容 AstrBot V4
+try:
+    from astrbot.api.event import EventMessageType
+except ImportError:
+    from astrbot.api.event.filter import EventMessageType
 
 from .models import PluginConfig
 from .constants import MessageEmoji
@@ -137,9 +144,9 @@ class OmniDrawPlugin(Star):
         yield event.plain_result(f"✅ 已切换至模型：{selected_model}")
 
     # ==========================================
-    # 🚀 预设雷达拦截器：极速绕过副脑的专用改图通道
+    # 🚀 预设雷达拦截器：兼容任意指令前缀
     # ==========================================
-    @filter.on_message()
+    @filter.event_message_type(EventMessageType.ALL)
     async def on_message_preset(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
         if not self.plugin_config.presets: return
 
@@ -149,16 +156,19 @@ class OmniDrawPlugin(Star):
             if isinstance(comp, Plain):
                 text += comp.text
         text = text.strip()
+        if not text: return
 
-        # 必须是斜杠开头
-        if not text.startswith("/"): return
-
-        # 提取指令名，例如 /手办化 -> 手办化
-        cmd_name = text.split()[0][1:] 
+        # 🚀 兼容任意框架前缀 (自动去除开头的标点符号，如 / . # ! 等)
+        # 只要开头是非中英文字符，就把它当成前缀剥离掉
+        match = re.match(r'^([^\w\u4e00-\u9fa5]+)(.*)$', text)
+        if not match: 
+            return # 如果纯文本无任何前缀，说明是普通聊天，直接放行给大模型
+            
+        cmd_name = match.group(2).strip()
         
-        # 看看是不是在我们的预设字典里
+        # 看看剥离前缀后的词，是不是在我们的预设字典里
         if cmd_name not in self.plugin_config.presets:
-            return # 不是预设，放行给其他指令处理器
+            return # 不是预设，放行
 
         if not self._has_permission(event):
             yield event.plain_result(f"{MessageEmoji.WARNING} 抱歉，暂无权限！")
@@ -167,16 +177,16 @@ class OmniDrawPlugin(Star):
         # ⚠️ 强行要求带图！这是改图特供功能
         raw_refs = self._get_event_images(event)
         if not raw_refs:
-            yield event.plain_result(f"{MessageEmoji.WARNING} 魔法失效！请发一张图片，并配文「/{cmd_name}」重试哦~")
+            yield event.plain_result(f"{MessageEmoji.WARNING} 魔法失效！请发一张图片，并配文「{text}」重试哦~")
             return
 
         preset_prompt = self.plugin_config.presets[cmd_name]
         safe_refs = await self._process_and_save_images(raw_refs)
         
-        # 按照你的要求，极简回复
+        # 极简回复
         yield event.plain_result(f"✨ 正在绘制……")
         
-        # 🚀 直接走底层发送，彻彻底底绕开大模型副脑！
+        # 🚀 直接走底层发送，彻底绕开大模型副脑！
         try:
             async with aiohttp.ClientSession() as session:
                 chain_manager = ChainManager(self.plugin_config, session)
@@ -187,7 +197,9 @@ class OmniDrawPlugin(Star):
             logger.error(f"预设生图失败: {e}")
             yield event.plain_result(f"💥 绘制失败: {e}")
 
-
+    # ==========================================
+    # 常规指令区
+    # ==========================================
     @filter.command("画")
     @handle_errors
     async def cmd_draw(self, event: AstrMessageEvent, message: str = "") -> AsyncGenerator[Any, None]:

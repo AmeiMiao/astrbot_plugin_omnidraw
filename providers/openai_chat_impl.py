@@ -1,6 +1,6 @@
 """
 AstrBot 万象画卷插件 v3.1 - OpenAI Chat 兼容实现
-功能：保留防盗链拦截 + 最终提示词日志打印，剥离复杂的双图反转与标签逻辑
+功能：保留防盗链拦截 + 最终提示词日志打印，使用 Markdown 降维法强力注入垫图
 """
 import aiohttp
 import re
@@ -42,41 +42,45 @@ class OpenAIChatProvider(BaseProvider):
         persona_ref = kwargs.get("persona_ref")
         user_ref = kwargs.get("user_ref")
 
-        # ==========================================
-        # 📝 保留：打印最终发送给 API 的提示词内容
-        # ==========================================
         logger.info(f"📝 [Chat/Vision通道] 最终发送给 API 的核心提示词:\n{prompt}")
 
-        # 恢复最纯粹的基础结构：文字置顶
-        user_content = [{"type": "text", "text": prompt}]
+        # ==========================================
+        # 🚀 思路一：Markdown 降维打击法
+        # 将图片转化为纯字符串，彻底绕过 API 中转对多模态数组的拦截
+        # ==========================================
+        final_prompt_parts = []
 
-        # 恢复默认顺序：先传人设图，再传用户图（无多余标签）
+        # 1. 注入人设图
         if persona_ref:
             b64_persona = await self._encode_image_to_base64(persona_ref)
             if b64_persona:
-                user_content.append({"type": "image_url", "image_url": {"url": b64_persona}})
-                logger.info("✅ [Chat/Vision] 成功将【专属人设图】转化为视觉信号注入对话")
+                final_prompt_parts.append(f"![persona_reference_image]({b64_persona})")
+                logger.info("✅ [Chat/Vision] 成功将【专属人设图】降维为 Markdown 嵌入文本")
 
+        # 2. 注入用户动作图
         if user_ref:
             b64_user = await self._encode_image_to_base64(user_ref)
             if b64_user:
-                user_content.append({"type": "image_url", "image_url": {"url": b64_user}})
-                logger.info("✅ [Chat/Vision] 成功将【动态姿势图】转化为视觉信号注入对话")
+                final_prompt_parts.append(f"![user_action_reference]({b64_user})")
+                logger.info("✅ [Chat/Vision] 成功将【动态姿势图】降维为 Markdown 嵌入文本")
 
-        # 如果只有纯文本，退化为字符串
-        if len(user_content) == 1:
-            user_content = prompt
+        # 3. 注入纯文字提示词
+        final_prompt_parts.append(prompt)
+
+        # 拼接成一个巨大的纯文本字符串，两段之间用换行符隔开
+        user_content = "\n\n".join(final_prompt_parts)
 
         payload = {
             "model": self.config.model,
             "messages": [
                 {
                     "role": "system", 
-                    "content": "You are a professional image generation assistant. Based on the prompt and any reference images (e.g., character face or pose), generate the corresponding image and return ONLY the markdown image link: ![image](url). DO NOT output any extra conversational text."
+                    "content": "You are a professional image generation assistant. Based on the prompt and any reference images (provided as markdown image links), generate the corresponding image and return ONLY the markdown image link: ![image](url). DO NOT output any extra conversational text."
                 },
                 {
                     "role": "user", 
-                    "content": user_content
+                    # 彻底变为纯文本字符串，任何 API 中转站都不会再吃图了！
+                    "content": user_content 
                 }
             ]
         }

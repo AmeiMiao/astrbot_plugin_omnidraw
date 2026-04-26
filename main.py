@@ -1,6 +1,6 @@
 """
 AstrBot 万象画卷插件 v3.1
-功能：防盗链突破 + 透明回显(提示词/图数) + 强化人设图传输 + 完整工具链
+功能：防盗链突破 + 透明回显(修复语法Bug) + 强化人设图传输 + 完整工具链
 """
 import os
 import base64
@@ -152,7 +152,7 @@ class OmniDrawPlugin(Star):
         yield event.plain_result(f"✅ 已切换至模型：{selected_model}")
 
     # ==========================================
-    # 常规指令区 (透明回显 + 强化传输)
+    # 常规指令区 
     # ==========================================
     @filter.command("画")
     @handle_errors
@@ -198,14 +198,10 @@ class OmniDrawPlugin(Star):
         user_input = message.strip() if message else "看着镜头微笑"
         final_prompt, extra_kwargs = self.persona_manager.build_persona_prompt(user_input)
         
-        # 🚀 强化：获取预设人设图 和 用户发的图
         persona_ref = extra_kwargs.get("user_ref", "")
         raw_refs = self._get_event_images(event)
         
-        # 决定处理哪张图（用户发的优先，否则用预设人设图）
         target_refs = raw_refs if raw_refs else ([persona_ref] if persona_ref else [])
-        
-        # 🚀 终极强化：把人设图也送进转码器，化作安全的 Base64！
         safe_refs = await self._process_images_to_base64(target_refs)
         
         actual_ref_count = 0
@@ -213,7 +209,7 @@ class OmniDrawPlugin(Star):
             extra_kwargs["user_ref"] = safe_refs[0]
             actual_ref_count = 1
         else:
-            extra_kwargs.pop("user_ref", None) # 防报错
+            extra_kwargs.pop("user_ref", None) 
             
         yield event.plain_result(
             f"{MessageEmoji.INFO} 正在为「{self.plugin_config.persona_name}」生成自拍...\n"
@@ -255,7 +251,7 @@ class OmniDrawPlugin(Star):
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
     # ==========================================
-    # 🤖 LLM 工具区 (带有大模型回显功能)
+    # 🤖 LLM 工具区 (修复回显格式 BUG)
     # ==========================================
     @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str) -> str:
@@ -282,8 +278,8 @@ class OmniDrawPlugin(Star):
             else:
                 extra_kwargs.pop("user_ref", None)
                 
-            # 🚀 给用户发送回显
-            await event.send(Plain(
+            # 🚀 修复语法 Bug：使用 event.plain_result 包装
+            await event.send(event.plain_result(
                 f"📸 收到自拍请求...\n"
                 f"📝 提示词：{final_prompt}\n"
                 f"🖼️ 参考图：{actual_ref_count} 张"
@@ -320,7 +316,8 @@ class OmniDrawPlugin(Star):
                 kwargs["user_ref"] = safe_refs[0]
                 actual_ref_count = 1
                 
-            await event.send(Plain(
+            # 🚀 修复语法 Bug
+            await event.send(event.plain_result(
                 f"🎨 收到画图请求...\n"
                 f"📝 提示词：{prompt}\n"
                 f"🖼️ 参考图：{actual_ref_count} 张"
@@ -331,7 +328,7 @@ class OmniDrawPlugin(Star):
                 image_url = await chain_manager.run_chain("text2img", prompt, **kwargs)
 
             await event.send(event.chain_result([self._create_image_component(image_url)]))
-            return "系统提示：画图发送成功。请回复一句话完美收尾。"
+            return "系统提示：画图发送成功。请立刻回复用户一句话完美收尾。"
 
         except Exception as e:
             return f"系统提示：画图失败 ({str(e)})。"
@@ -350,7 +347,8 @@ class OmniDrawPlugin(Star):
             raw_refs = self._get_event_images(event)
             safe_refs = await self._process_images_to_base64(raw_refs)
             
-            await event.send(Plain(
+            # 🚀 修复语法 Bug
+            await event.send(event.plain_result(
                 f"🎞️ 收到视频渲染请求...\n"
                 f"📝 提示词：{prompt}\n"
                 f"🖼️ 参考图：{len(safe_refs)} 张\n"

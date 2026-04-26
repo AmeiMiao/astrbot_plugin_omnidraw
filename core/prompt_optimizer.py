@@ -25,6 +25,11 @@ class PromptOptimizer:
         return tags
 
     async def optimize(self, raw_action: str) -> str:
+        # 🚀 物理断点：检查 WebUI 总开关，没开就直接秒退原词
+        if not getattr(self.config, "enable_optimizer", True):
+            logger.debug(f"💤 [副脑开关未开启] 跳过优化，直接使用原词: {raw_action}")
+            return raw_action
+
         if not raw_action or raw_action.strip() == "":
             return raw_action
 
@@ -89,7 +94,6 @@ CRITICAL RULES:
 
         async with aiohttp.ClientSession() as session:
             try:
-                # 🚀 获取 WebUI 设定的超时时间
                 timeout_val = self.config.optimizer_timeout
                 logger.info(f"🧠 [副脑拦截] 正在按 JSON 结构重构提示词 (模型: {self.config.optimizer_model}, 超时: {timeout_val}s)")
                 

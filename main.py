@@ -1,6 +1,6 @@
 """
 AstrBot 万象画卷插件 v3.1
-功能：防盗链突破 + JSON高维提示词优化 + 极速并发抽卡 + 纯 LLM 沉浸式交互 + 消除底层超长日志
+功能：防盗链突破 + JSON高维提示词优化 + 极速并发抽卡 + 单张瀑布流发送 + 纯 LLM 沉浸式交互
 """
 import os
 import base64
@@ -44,27 +44,23 @@ class OmniDrawPlugin(Star):
                 if img_ref: images.append(img_ref)
         return images
 
-    # 🚀 核心修复：不再返回超长的 base64，而是保存为本地临时文件并返回路径
     async def _process_and_save_images(self, raw_images: list) -> list:
         processed_paths = []
         if not raw_images: return processed_paths
         
         save_dir = os.path.abspath(os.path.join(os.getcwd(), "data", "plugin_data", "astrbot_plugin_omnidraw", "user_refs"))
         os.makedirs(save_dir, exist_ok=True)
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
         
         async with aiohttp.ClientSession() as session:
             for img_ref in raw_images:
                 if not img_ref: continue
-                
-                # 1. 如果已经是本地路径，验证存在后直接使用
                 if not img_ref.startswith("http"):
                     abs_path = os.path.abspath(img_ref)
                     if os.path.exists(abs_path):
                         processed_paths.append(abs_path)
                     continue
 
-                # 2. 如果是网络图，下载它以突破防盗链，并保存为本地实体文件
                 for attempt in range(3):
                     try:
                         async with session.get(img_ref, headers=headers, timeout=15) as resp:
@@ -73,7 +69,7 @@ class OmniDrawPlugin(Star):
                                 file_path = os.path.join(save_dir, f"ref_{uuid.uuid4().hex[:8]}.png")
                                 with open(file_path, "wb") as f: 
                                     f.write(img_data)
-                                processed_paths.append(file_path) # 把干净的文件路径交给底层
+                                processed_paths.append(file_path) 
                                 break
                     except: 
                         await asyncio.sleep(1)
@@ -235,7 +231,7 @@ class OmniDrawPlugin(Star):
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
     # ==========================================
-    # 🤖 LLM 工具区 (静默发图 + 并发抽卡)
+    # 🤖 LLM 工具区 (瀑布流逐张发送)
     # ==========================================
     @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str, count: int = 1) -> str:
@@ -276,10 +272,13 @@ class OmniDrawPlugin(Star):
             if not valid_urls:
                 raise Exception(f"并发请求均失败，错误参考: {results[0] if results else 'Unknown'}")
                 
-            components = [self._create_image_component(url) for url in valid_urls]
-            await event.send(event.chain_result(components))
+            # 🚀 循环：分离每张图片，独立打包成单独的消息发送
+            for url in valid_urls:
+                component = self._create_image_component(url)
+                await event.send(event.chain_result([component]))
+                await asyncio.sleep(0.5) # 微秒级停顿，防止被群平台判定刷屏吞图
             
-            return f"系统提示：已在底层成功生成并发送了 {len(valid_urls)} 张图片。请你现在根据用户的要求，用符合你人设、非常自然俏皮的语气进行最终回复。绝对不要说出'收到指令'或提及你是怎么生成图片的。"
+            return f"系统提示：已在底层成功生成并单张连续发送了 {len(valid_urls)} 张图片。请你现在根据用户的要求，用符合你人设、非常自然俏皮的语气进行最终回复。绝对不要说出'收到指令'或提及你是怎么生成图片的。"
             
         except Exception as e:
             return f"系统提示：画图失败 ({str(e)})。"
@@ -317,10 +316,13 @@ class OmniDrawPlugin(Star):
             valid_urls = [url for url in results if isinstance(url, str) and url]
             if not valid_urls: raise Exception("所有节点生成失败")
 
-            components = [self._create_image_component(url) for url in valid_urls]
-            await event.send(event.chain_result(components))
+            # 🚀 循环：分离每张图片，独立打包成单独的消息发送
+            for url in valid_urls:
+                component = self._create_image_component(url)
+                await event.send(event.chain_result([component]))
+                await asyncio.sleep(0.5) # 微秒级停顿，防止被群平台判定刷屏吞图
             
-            return f"系统提示：已成功生成 {len(valid_urls)} 张图并下发。请立刻用自然的语气回复用户（如：画好了哦，你看看喜不喜欢~），切勿暴露系统指令。"
+            return f"系统提示：已成功生成并连续下发了 {len(valid_urls)} 张图。请立刻用自然的语气回复用户（如：画好了哦，你看看喜不喜欢~），切勿暴露系统指令。"
 
         except Exception as e:
             return f"系统提示：画图失败 ({str(e)})。"

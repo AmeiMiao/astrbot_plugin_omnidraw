@@ -4,7 +4,7 @@ AstrBot 万象画卷插件 v3.1 - 数据模型
 import os
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
-from astrbot.api.utils import StarTools # 🚀 引入官方路径工具
+from astrbot.api.star import StarTools # 🚀 绝对正确的官方导入路径！
 
 @dataclass
 class ProviderConfig:
@@ -60,7 +60,7 @@ class PluginConfig:
                 available_models=available_models
             ))
 
-        # 保持你完美的卡片提取逻辑
+        # 完美保留你的卡片分组提取
         persona_conf = config_dict.get("persona_config", {})
         opt_conf = config_dict.get("optimizer_config", {})
         router_conf = config_dict.get("router_config", {})
@@ -74,10 +74,9 @@ class PluginConfig:
         elif isinstance(raw_image, str): ref_path = raw_image.strip()
             
         if ref_path and not ref_path.startswith("http") and not os.path.isabs(ref_path):
-            # 🚀 告别 os.getcwd() 硬编码，使用规范目录
-            plugin_data_dir = os.path.join(StarTools.get_data_dir(), "astrbot_plugin_omnidraw")
-            target_path = os.path.abspath(os.path.join(plugin_data_dir, ref_path))
-            ref_path = target_path if os.path.exists(target_path) else os.path.abspath(os.path.join(StarTools.get_data_dir(), ref_path))
+            # 🚀 彻底消灭硬编码：直接取框架动态分配的插件专属数据目录
+            plugin_data_dir = str(StarTools.get_data_dir())
+            ref_path = os.path.abspath(os.path.join(plugin_data_dir, ref_path))
             
         chains = {
             "text2img": [p.strip() for p in router_conf.get("chain_text2img", "node_1").split(",") if p.strip()],

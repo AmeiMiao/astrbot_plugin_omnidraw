@@ -9,7 +9,7 @@ import aiohttp
 import asyncio
 from typing import AsyncGenerator, Any
 
-from astrbot.api.star import Context, Star, register, StarTools # 🚀 正确安全导入
+from astrbot.api.star import Context, Star, register, StarTools 
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.message_components import Image, Plain, Video
 from astrbot.api import logger, llm_tool 
@@ -27,12 +27,8 @@ from .core.prompt_optimizer import PromptOptimizer
 class OmniDrawPlugin(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
-        # 🚀 核心修复：在正统注册的入口处调用，彻底解决元数据寻址报错！
         self.data_dir = str(StarTools.get_data_dir())
-        
-        # 将安全的绝对路径喂给 models.py
         self.plugin_config = PluginConfig.from_dict(config or {}, self.data_dir)
-        
         self.cmd_parser = CommandParser()
         self.persona_manager = PersonaManager(self.plugin_config)
         self.video_manager = VideoManager(self.plugin_config)
@@ -52,7 +48,6 @@ class OmniDrawPlugin(Star):
         processed_paths = []
         if not raw_images: return processed_paths
         
-        # 🚀 基于主路径构建临时目录，消灭 os.getcwd()
         save_dir = os.path.abspath(os.path.join(self.data_dir, "user_refs"))
         os.makedirs(save_dir, exist_ok=True)
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
@@ -92,7 +87,6 @@ class OmniDrawPlugin(Star):
     def _create_image_component(self, image_url: str) -> Image:
         if image_url.startswith("data:image"):
             b64_data = image_url.split(",", 1)[1]
-            # 🚀 基于主路径构建临时目录，消灭 os.getcwd()
             save_dir = os.path.abspath(os.path.join(self.data_dir, "temp_images"))
             os.makedirs(save_dir, exist_ok=True)
             file_path = os.path.join(save_dir, f"img_{uuid.uuid4().hex[:8]}.png")
@@ -110,7 +104,12 @@ class OmniDrawPlugin(Star):
     @filter.command("万象帮助")
     @handle_errors
     async def cmd_help(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
-        yield event.plain_result("📖 万象画卷 v3.1\n/画 [提示词]\n/自拍 [动作描述]\n/切换模型 [序号]\n/视频 [提示词]")
+        msg = "📖 万象画卷 v3.1\n/画 [提示词]\n/自拍 [动作描述]\n/切换模型 [序号]\n/视频 [提示词]\n\n"
+        if self.plugin_config.presets:
+            msg += "✨ 极速预设 (带图发送):\n"
+            for p in self.plugin_config.presets.keys():
+                msg += f"/{p}\n"
+        yield event.plain_result(msg)
 
     @filter.command("切换模型")
     @handle_errors
@@ -136,6 +135,58 @@ class OmniDrawPlugin(Star):
             return
         provider.model = selected_model
         yield event.plain_result(f"✅ 已切换至模型：{selected_model}")
+
+    # ==========================================
+    # 🚀 预设雷达拦截器：极速绕过副脑的专用改图通道
+    # ==========================================
+    @filter.on_message()
+    async def on_message_preset(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
+        if not self.plugin_config.presets: return
+
+        # 提取用户的纯文本
+        text = ""
+        for comp in event.message_obj.message:
+            if isinstance(comp, Plain):
+                text += comp.text
+        text = text.strip()
+
+        # 必须是斜杠开头
+        if not text.startswith("/"): return
+
+        # 提取指令名，例如 /手办化 -> 手办化
+        cmd_name = text.split()[0][1:] 
+        
+        # 看看是不是在我们的预设字典里
+        if cmd_name not in self.plugin_config.presets:
+            return # 不是预设，放行给其他指令处理器
+
+        if not self._has_permission(event):
+            yield event.plain_result(f"{MessageEmoji.WARNING} 抱歉，暂无权限！")
+            return
+
+        # ⚠️ 强行要求带图！这是改图特供功能
+        raw_refs = self._get_event_images(event)
+        if not raw_refs:
+            yield event.plain_result(f"{MessageEmoji.WARNING} 魔法失效！请发一张图片，并配文「/{cmd_name}」重试哦~")
+            return
+
+        preset_prompt = self.plugin_config.presets[cmd_name]
+        safe_refs = await self._process_and_save_images(raw_refs)
+        
+        # 按照你的要求，极简回复
+        yield event.plain_result(f"✨ 正在绘制……")
+        
+        # 🚀 直接走底层发送，彻彻底底绕开大模型副脑！
+        try:
+            async with aiohttp.ClientSession() as session:
+                chain_manager = ChainManager(self.plugin_config, session)
+                image_url = await chain_manager.run_chain("text2img", preset_prompt, user_ref=safe_refs[0])
+                
+            yield event.chain_result([self._create_image_component(image_url)])
+        except Exception as e:
+            logger.error(f"预设生图失败: {e}")
+            yield event.plain_result(f"💥 绘制失败: {e}")
+
 
     @filter.command("画")
     @handle_errors
@@ -237,9 +288,6 @@ class OmniDrawPlugin(Star):
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str, count: int = 1) -> str:
         """
         以此 AI 助理（我）的固定人设拍摄自拍。
-        Args:
-            action (string): 动作和场景描述。纯动作描述即可，无需包含人物长相特征。
-            count (int): 需要生成的图片数量。默认为1。如果用户明确要求多张(如“来5张”)，请传入对应数字。
         """
         if not self._has_permission(event): return "系统提示：无权限调用。"
 
@@ -286,9 +334,6 @@ class OmniDrawPlugin(Star):
     async def tool_generate_image(self, event: AstrMessageEvent, prompt: str, count: int = 1) -> str:
         """
         AI 画图工具。当用户提出明确的画面要求你画出来时调用此工具。
-        Args:
-            prompt (string): 扩写成英文的高质量动作与场景提示词。
-            count (int): 需要生成的图片数量。默认为1。如果用户明确要求多张(如“来5张”)，请传入对应数字。
         """
         if not self._has_permission(event): return "系统提示：无权限调用。"
 
@@ -329,9 +374,6 @@ class OmniDrawPlugin(Star):
     async def tool_generate_video(self, event: AstrMessageEvent, prompt: str, count: int = 1) -> str:
         """
         AI 视频生成工具。当用户要求生成一段视频(mp4)时调用此工具。
-        Args:
-            prompt (string): 扩写成英文的高质量视频场景和动作提示词。
-            count (int): 视频数量，默认为 1。
         """
         if not self._has_permission(event): return "系统提示：无权限调用。"
 

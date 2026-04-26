@@ -20,8 +20,9 @@ class PluginConfig:
     providers: List[ProviderConfig]
     video_providers: List[ProviderConfig]
     chains: Dict[str, List[str]]
+    enable_optimizer: bool        # 🚀 新增：副脑总开关
     optimizer_model: str  
-    optimizer_timeout: float  # 🚀 新增：副脑超时时间
+    optimizer_timeout: float  
     persona_name: str
     persona_base_prompt: str
     persona_ref_image: str
@@ -99,8 +100,9 @@ class PluginConfig:
             providers=providers,
             video_providers=video_providers,
             chains=chains,
+            enable_optimizer=config_dict.get("enable_optimizer", True), # 🚀 默认开启
             optimizer_model=config_dict.get("optimizer_model", "gpt-4o-mini"),
-            optimizer_timeout=float(config_dict.get("optimizer_timeout", 15.0)), # 🚀 获取配置项，默认 15 秒
+            optimizer_timeout=float(config_dict.get("optimizer_timeout", 15.0)),
             persona_name=config_dict.get("persona_name", "默认助理"),
             persona_base_prompt=config_dict.get("persona_base_prompt", ""),
             persona_ref_image=ref_path,

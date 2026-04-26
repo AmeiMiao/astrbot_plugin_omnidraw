@@ -1,7 +1,8 @@
 """
 视频任务后台挂机引擎 (Background Polling Task)
-功能：代替大模型忍受视频生成的漫长耗时，不阻塞聊天通道
+功能：代替大模型忍受视频生成的漫长耗时，不阻塞聊天通道，支持自动降级轮询接口
 """
+import re
 import time
 import aiohttp
 import asyncio
@@ -25,44 +26,90 @@ class VideoManager:
             return self.config.video_providers[0]
         return None
 
+    def _extract_url(self, text: str) -> str:
+        """从 chat 接口返回的杂乱文本中精准提取出 URL 链接"""
+        match = re.search(r'(https?://[^\s\]\)"\']+)', text)
+        return match.group(1) if match else text
+
     async def _fetch_video_from_api(self, provider: ProviderConfig, prompt: str, image_url: str = "") -> str:
         """
-        实际向视频 API 发送请求的底层逻辑。
-        注意：目前大多数兼容 OpenAI 的视频站也是走 /v1/images/generations 或者类似的兼容接口。
-        （此处兼容大部分标准的 OpenAI 镜像站视频请求格式）
+        🚀 终极健壮版：自动按顺序尝试多个视频接口
         """
         headers = {
             "Authorization": f"Bearer {provider.api_keys[0]}",
             "Content-Type": "application/json"
         }
         
-        # 兼容目前市面上主流的视频模型格式 (如 Grok Video, Runway, Kling等镜像站)
-        payload = {
-            "model": provider.model,
-            "prompt": prompt
-        }
+        # 定义要尝试的接口顺序（优先级从上到下）
+        endpoints_to_try = [
+            "/v1/chat/completions",
+            "/v1/videos/generations",
+            "/v1/images/generations"
+        ]
         
-        # 如果带有参考图 (图生视频)
-        if image_url:
-            payload["image_url"] = image_url
-
-        endpoint = provider.base_url.rstrip("/") + "/v1/images/generations" # 有的镜像站视频用的也是这个端点，你可根据实际情况修改
+        last_error = None
         
         async with aiohttp.ClientSession() as session:
-            try:
-                logger.info(f"🎬 [视频任务发出] 正在请求模型: {provider.model} (这可能需要几分钟...)")
-                # 设定长达几分钟的超时时间，因为视频 API 通常是长连接阻塞返回
-                async with session.post(endpoint, headers=headers, json=payload, timeout=provider.timeout) as resp:
-                    resp.raise_for_status()
-                    data = await resp.json()
-                    
-                    if "data" in data and len(data["data"]) > 0:
-                        return data["data"][0].get("url", "")
-                    else:
-                        raise Exception(f"API 返回数据异常: {data}")
-            except Exception as e:
-                logger.error(f"❌ 视频生成失败: {e}")
-                raise
+            for endpoint_suffix in endpoints_to_try:
+                endpoint = provider.base_url.rstrip("/") + endpoint_suffix
+                
+                # 1. 动态构建 Payload (不同接口格式完全不同)
+                if endpoint_suffix == "/v1/chat/completions":
+                    # Chat 接口要求 messages 格式
+                    content = prompt
+                    if image_url:
+                        # 多模态图生视频格式
+                        content = [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": image_url}}
+                        ]
+                    payload = {
+                        "model": provider.model,
+                        "messages": [{"role": "user", "content": content}]
+                    }
+                else:
+                    # Generations 接口要求 prompt 格式
+                    payload = {
+                        "model": provider.model,
+                        "prompt": prompt
+                    }
+                    if image_url:
+                        payload["image_url"] = image_url
+
+                try:
+                    logger.info(f"🎬 [尝试视频接口] 正在请求: {endpoint}")
+                    # 设定长达几分钟的超时时间，因为视频 API 通常是长连接阻塞返回
+                    async with session.post(endpoint, headers=headers, json=payload, timeout=provider.timeout) as resp:
+                        # 如果是 404 (接口不存在) 或 400 (参数不支持)，抛出异常触发重试
+                        resp.raise_for_status() 
+                        
+                        data = await resp.json()
+                        
+                        # 2. 动态解析返回值
+                        if endpoint_suffix == "/v1/chat/completions":
+                            if "choices" in data and len(data["choices"]) > 0:
+                                raw_content = data["choices"][0]["message"]["content"]
+                                # Chat 接口可能会返回 Markdown 代码，需要提取纯 URL
+                                final_url = self._extract_url(raw_content)
+                                logger.info(f"✅ 成功从 {endpoint_suffix} 获取视频！")
+                                return final_url
+                            else:
+                                raise Exception(f"Chat返回值异常: {data}")
+                        else:
+                            if "data" in data and len(data["data"]) > 0:
+                                logger.info(f"✅ 成功从 {endpoint_suffix} 获取视频！")
+                                return data["data"][0].get("url", "")
+                            else:
+                                raise Exception(f"Generations返回值异常: {data}")
+                                
+                except Exception as e:
+                    last_error = str(e)
+                    logger.warning(f"⚠️ 接口 {endpoint_suffix} 尝试失败: {e}，自动切换下一个...")
+                    continue # 核心：失败则悄悄继续下一次循环
+
+            # 如果把三个接口都试完了还是没 return 出去，说明彻底凉了
+            logger.error(f"❌ 所有视频接口均尝试失败。最后的错误: {last_error}")
+            raise Exception(f"所有接口均不支持该操作。最后错误: {last_error}")
 
     async def background_task_runner(self, event: AstrMessageEvent, prompt: str, image_url: str = ""):
         """

@@ -1,6 +1,6 @@
 """
 AstrBot 万象画卷插件 v3.1
-功能：防盗链突破 + 透明回显(修复语法Bug) + 强化人设图传输 + 完整工具链
+功能：防盗链突破 + LLM 静默后台回显(不在群内刷屏) + 强化人设图传输
 """
 import os
 import base64
@@ -62,7 +62,6 @@ class OmniDrawPlugin(Star):
                 if not img_ref: continue
                 if img_ref.startswith("http"):
                     success = False
-                    # 3次重试死磕防盗链
                     for attempt in range(3):
                         try:
                             async with session.get(img_ref, headers=headers, timeout=15) as resp:
@@ -79,7 +78,6 @@ class OmniDrawPlugin(Star):
                     if not success:
                         logger.error(f"❌ [防盗链] 彻底丢失参考图: {img_ref}")
                 else:
-                    # 强力读取本地人设图/缓存图
                     try:
                         if os.path.exists(img_ref):
                             with open(img_ref, "rb") as f:
@@ -152,7 +150,7 @@ class OmniDrawPlugin(Star):
         yield event.plain_result(f"✅ 已切换至模型：{selected_model}")
 
     # ==========================================
-    # 常规指令区 
+    # 常规指令区 (保持指令回显给用户看)
     # ==========================================
     @filter.command("画")
     @handle_errors
@@ -251,7 +249,7 @@ class OmniDrawPlugin(Star):
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
     # ==========================================
-    # 🤖 LLM 工具区 (修复回显格式 BUG)
+    # 🤖 LLM 工具区 (静默化！回显转入后台日志！)
     # ==========================================
     @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str) -> str:
@@ -268,6 +266,7 @@ class OmniDrawPlugin(Star):
             persona_ref = extra_kwargs.get("user_ref", "")
             raw_refs = self._get_event_images(event)
             
+            # 🚀 第一步：优先安全处理并注入所有图片
             target_refs = raw_refs if raw_refs else ([persona_ref] if persona_ref else [])
             safe_refs = await self._process_images_to_base64(target_refs)
             
@@ -278,13 +277,12 @@ class OmniDrawPlugin(Star):
             else:
                 extra_kwargs.pop("user_ref", None)
                 
-            # 🚀 修复语法 Bug：使用 event.plain_result 包装
-            await event.send(event.plain_result(
-                f"📸 收到自拍请求...\n"
-                f"📝 提示词：{final_prompt}\n"
-                f"🖼️ 参考图：{actual_ref_count} 张"
-            ))
+            # 🚀 第二步：不打扰群友，在后台详细打桩打印！
+            logger.info(f"📸 [LLM 工具调用] generate_selfie\n"
+                        f"📝 注入提示词：{final_prompt}\n"
+                        f"🖼️ 注入参考图：{actual_ref_count} 张")
 
+            # 🚀 第三步：携带完整参数正式请求 API
             chain_to_use = "selfie" if "selfie" in self.plugin_config.chains else "text2img"
             async with aiohttp.ClientSession() as session:
                 chain_manager = ChainManager(self.plugin_config, session)
@@ -309,19 +307,18 @@ class OmniDrawPlugin(Star):
         try:
             kwargs = {}
             raw_refs = self._get_event_images(event)
-            safe_refs = await self._process_images_to_base64(raw_refs)
             
+            # 🚀 优先注入图片
+            safe_refs = await self._process_images_to_base64(raw_refs)
             actual_ref_count = 0
             if safe_refs:
                 kwargs["user_ref"] = safe_refs[0]
                 actual_ref_count = 1
                 
-            # 🚀 修复语法 Bug
-            await event.send(event.plain_result(
-                f"🎨 收到画图请求...\n"
-                f"📝 提示词：{prompt}\n"
-                f"🖼️ 参考图：{actual_ref_count} 张"
-            ))
+            # 🚀 后台精准打桩
+            logger.info(f"🎨 [LLM 工具调用] generate_image\n"
+                        f"📝 注入提示词：{prompt}\n"
+                        f"🖼️ 注入参考图：{actual_ref_count} 张")
 
             async with aiohttp.ClientSession() as session:
                 chain_manager = ChainManager(self.plugin_config, session)
@@ -345,15 +342,14 @@ class OmniDrawPlugin(Star):
 
         try:
             raw_refs = self._get_event_images(event)
+            
+            # 🚀 优先注入图片
             safe_refs = await self._process_images_to_base64(raw_refs)
             
-            # 🚀 修复语法 Bug
-            await event.send(event.plain_result(
-                f"🎞️ 收到视频渲染请求...\n"
-                f"📝 提示词：{prompt}\n"
-                f"🖼️ 参考图：{len(safe_refs)} 张\n"
-                f"⏳ 任务已提交后台，请稍候。"
-            ))
+            # 🚀 后台精准打桩
+            logger.info(f"🎞️ [LLM 工具调用] generate_video\n"
+                        f"📝 注入提示词：{prompt}\n"
+                        f"🖼️ 注入参考图：{len(safe_refs)} 张")
             
             asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
             return "系统提示：视频任务已提交后台。请用自然语气告诉用户正在渲染中，稍后主动发给他。"

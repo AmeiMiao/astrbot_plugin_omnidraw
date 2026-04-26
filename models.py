@@ -1,3 +1,6 @@
+"""
+AstrBot 万象画卷插件 v3.1 - 数据模型
+"""
 import os
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
@@ -55,7 +58,13 @@ class PluginConfig:
                 available_models=available_models
             ))
 
-        raw_image = config_dict.get("persona_ref_image", "")
+        # 🚀 从对象卡片中提取配置
+        persona_conf = config_dict.get("persona_config", {})
+        opt_conf = config_dict.get("optimizer_config", {})
+        router_conf = config_dict.get("router_config", {})
+        perm_conf = config_dict.get("permission_config", {})
+
+        raw_image = persona_conf.get("persona_ref_image", "")
         ref_path = ""
         if isinstance(raw_image, list) and len(raw_image) > 0: raw_image = raw_image[0]
         if isinstance(raw_image, dict):
@@ -68,27 +77,30 @@ class PluginConfig:
             ref_path = target_path if os.path.exists(target_path) else os.path.abspath(os.path.join(os.getcwd(), "data", ref_path))
             
         chains = {
-            "text2img": [p.strip() for p in config_dict.get("chain_text2img", "node_1").split(",") if p.strip()],
-            "selfie": [p.strip() for p in config_dict.get("chain_selfie", "node_1").split(",") if p.strip()],
-            "video": [p.strip() for p in config_dict.get("chain_video", "video_node_1").split(",") if p.strip()],
-            "optimizer": [p.strip() for p in config_dict.get("chain_optimizer", "node_1").split(",") if p.strip()] 
+            "text2img": [p.strip() for p in router_conf.get("chain_text2img", "node_1").split(",") if p.strip()],
+            "selfie": [p.strip() for p in router_conf.get("chain_selfie", "node_1").split(",") if p.strip()],
+            "video": [p.strip() for p in router_conf.get("chain_video", "video_node_1").split(",") if p.strip()],
+            "optimizer": [p.strip() for p in opt_conf.get("chain_optimizer", "node_1").split(",") if p.strip()] 
         }
 
-        raw_users = config_dict.get("allowed_users", "")
+        raw_users = perm_conf.get("allowed_users", "")
         allowed_users = [u.strip() for u in raw_users.replace("，", ",").split(",") if u.strip()] if isinstance(raw_users, str) else []
 
         return cls(
             providers=providers,
             video_providers=video_providers,
             chains=chains,
-            enable_optimizer=config_dict.get("enable_optimizer", True),
-            optimizer_model=config_dict.get("optimizer_model", "gpt-4o-mini"),
-            optimizer_timeout=float(config_dict.get("optimizer_timeout", 15.0)),
-            persona_name=config_dict.get("persona_name", "默认助理"),
-            persona_base_prompt=config_dict.get("persona_base_prompt", ""),
+            enable_optimizer=opt_conf.get("enable_optimizer", True),
+            optimizer_model=opt_conf.get("optimizer_model", "gpt-4o-mini"),
+            optimizer_timeout=float(opt_conf.get("optimizer_timeout", 15.0)),
+            persona_name=persona_conf.get("persona_name", "默认助理"),
+            persona_base_prompt=persona_conf.get("persona_base_prompt", ""),
             persona_ref_image=ref_path,
             allowed_users=allowed_users
         )
 
     def get_provider(self, provider_id: str) -> ProviderConfig:
         return next((p for p in self.providers if p.id == provider_id), None)
+        
+    def get_video_provider(self, provider_id: str) -> ProviderConfig:
+        return next((p for p in self.video_providers if p.id == provider_id), None)

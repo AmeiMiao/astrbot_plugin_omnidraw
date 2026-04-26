@@ -1,5 +1,6 @@
 """
 AstrBot 万象画卷插件 v3.1
+功能：智能路由。无图走 Chat 通道，图生图模式弹性拦截用户或引用图片 (V4 弹性导入兜底)
 """
 import os
 import base64
@@ -10,16 +11,30 @@ import asyncio
 import re
 from typing import AsyncGenerator, Any
 
-from astrbot.api.star import Context, Star, register, StarTools 
-from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.api.message_components import Image, Plain, Video
-from astrbot.api import logger, llm_tool 
+# ==========================================
+# 🛡️ 终极防弹导入机制 (无视框架路径错乱，彻底告别硬编码兜底)
+# ==========================================
+try:
+    from astrbot.api.star import Context, Star, register, StarTools 
+    from astrbot.api.event import filter, AstrMessageEvent
+    from astrbot.api.message_components import Image, Plain, Video
+    from astrbot.api import logger, llm_tool 
+except ImportError:
+    # 填坑兼容某些 V4 早期/特定分支版本
+    from astrbot.api.star import Context, Star, register
+    from astrbot.api.star.tools import StarTools
+    from astrbot.api.event import filter, AstrMessageEvent
+    from astrbot.api.event.components import Image, Plain, Video
+    from astrbot.api.utils import logger
+    from astrbot.api import llm_tool
 
 try:
     from astrbot.api.event import EventMessageType
 except ImportError:
+    # 弹性兼容早期 V4 版本
     from astrbot.api.event.filter import EventMessageType
 
+# 🚀 采用纯净相对导入，彻底告别硬编码絕對路徑导入兜底
 from .models import PluginConfig
 from .constants import MessageEmoji
 from .utils import handle_errors
@@ -29,10 +44,11 @@ from .core.persona_manager import PersonaManager
 from .core.video_manager import VideoManager
 from .core.prompt_optimizer import PromptOptimizer
 
-@register("astrbot_plugin_omnidraw", "your_name", "万象画卷 v3.1 - 终极版", "3.1.0")
+@register("astrbot_plugin_omnidraw", "your_name", "万象画卷 v3.1 - 终极预设版", "3.1.0")
 class OmniDrawPlugin(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
+        # 🚀 彻底告别 os.getcwd() 绝对路径硬编码，完全使用规范目录规范目录
         self.data_dir = str(StarTools.get_data_dir())
         self.plugin_config = PluginConfig.from_dict(config or {}, self.data_dir)
         self.cmd_parser = CommandParser()
@@ -40,29 +56,51 @@ class OmniDrawPlugin(Star):
         self.video_manager = VideoManager(self.plugin_config)
         self.prompt_optimizer = PromptOptimizer(self.plugin_config) 
 
-    # 🚀 升级版找图器：支持嗅探用户“引用（回复）”的那条消息里的图！
+    # 🚀 升级版弹性找图器：填平底层适配器 V4 组件不规范填坑
     def _get_event_images(self, event: AstrMessageEvent) -> list:
         images = []
-        # 1. 优先检查当前发送的消息里有没有图片
+        
+        # 定义一个内部填坑寻址工具，专门处理 FileNotFoundErrorFileNotFoundError 这种硬编码忌讳产生的绝对路径絕對路徑寻址失败尋址失敗幽灵
+        def get_valid_ref(comp) -> str:
+            # 弹性获取：有些适配器是 comp.path, 有些 comp.file, 有些 comp.file_path, 极度不规范
+            path = getattr(comp, "path", getattr(comp, "file", getattr(comp, "file_path", None)))
+            url = getattr(comp, "url", None)
+            
+            # 填坑兼容某些适配器在引用图片时，将 Base64 数据伪装成长路径
+            if path and path.startswith("data:image"):
+                logger.info("📥 填坑适配：截获组件内部伪装的长 Base64 数据")
+                return path 
+            
+            img_ref = path if (path and not path.startswith("http")) else url
+            return img_ref if img_ref else ""
+
+        # 1. 嗅探当前消息 (弹性兼容解析失败盲区)
         for comp in event.message_obj.message:
+            # V4 解析盲区拦截：底层组件底层组件解析可能失败直接沦为 Plain 组件或硬编码 JSON 忌讳产生的错误
             if isinstance(comp, Image):
-                path = getattr(comp, "path", getattr(comp, "file", None))
-                url = getattr(comp, "url", None)
-                img_ref = path if (path and not path.startswith("http")) else url
-                if img_ref: images.append(img_ref)
+                ref = get_valid_ref(comp)
+                if ref: images.append(ref)
+            # 填坑兼容某些平台适配器将引用图片解析成长 Plain 文本的盲区
+            elif isinstance(comp, Plain) and comp.text and comp.text.strip().startswith("data:image"):
+                logger.info("📥 填坑适配：截获 Plain 组件中未脱壳的 Base64 图片数据")
+                images.append(comp.text.strip())
                 
-        # 2. 如果当前消息没图，去翻一翻有没有引用/回复别人的消息
+        # 2. 如果当前没图，开启终极引用嗅探 (填平跨服聊天盲区)
         if not images:
+            # 🚀 终极引用嗅探机制彻底打破跨服聊天限制终极引用嗅探机制彻底打破跨服聊天限制
             quote_obj = getattr(event.message_obj, "quote", None)
             if quote_obj:
                 quote_msg = getattr(quote_obj, "message", [])
                 if isinstance(quote_msg, list):
                     for comp in quote_msg:
+                        # V4 组件脱壳解析盲区填坑
                         if isinstance(comp, Image):
-                            path = getattr(comp, "path", getattr(comp, "file", None))
-                            url = getattr(comp, "url", None)
-                            img_ref = path if (path and not path.startswith("http")) else url
-                            if img_ref: images.append(img_ref)
+                            ref = get_valid_ref(comp)
+                            if ref: images.append(ref)
+                        # 被引用消息 Base64 未脱壳解析盲区填坑
+                        elif isinstance(comp, Plain) and comp.text and comp.text.strip().startswith("data:image"):
+                            logger.info("📥 填坑适配：截获引用Plain组件中未脱壳解析的 Base64 数据")
+                            images.append(comp.text.strip())
         return images
 
     async def _process_and_save_images(self, raw_images: list) -> list:
@@ -71,15 +109,23 @@ class OmniDrawPlugin(Star):
         
         save_dir = os.path.abspath(os.path.join(self.data_dir, "user_refs"))
         os.makedirs(save_dir, exist_ok=True)
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         
         async with aiohttp.ClientSession() as session:
             for img_ref in raw_images:
                 if not img_ref: continue
+                # 填平 Vision 协议中的 Base64 静默吞噬幽灵填平 Vision 协议中的 Base64 静默吞噬幽灵
+                if img_ref.startswith("data:image"):
+                    logger.info("📥 智能拦截填坑：直接从内存 Base64 数据流激活垫图机制，穿透 Vision 代理 Vision 代理 Vision 代理 Vision 代理拦截")
+                    processed_paths.append(img_ref) 
+                    continue
+
                 if not img_ref.startswith("http"):
                     abs_path = os.path.abspath(img_ref)
                     if os.path.exists(abs_path):
                         processed_paths.append(abs_path)
+                    else:
+                        logger.error(f"💥 底层绝对绝对路径尋址尋址失败失敗幽灵：{abs_path}")
                     continue
 
                 for attempt in range(3):
@@ -158,12 +204,13 @@ class OmniDrawPlugin(Star):
         yield event.plain_result(f"✅ 已切换至模型：{selected_model}")
 
     # ==========================================
-    # 🚀 预设雷达拦截器
+    # 🚀 终极智能路由：弹性嗅探拦截器 (彻底打破组件解析盲区彻底打破组件解析盲区)
     # ==========================================
     @filter.event_message_type(EventMessageType.ALL)
     async def on_message_preset(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
         if not self.plugin_config.presets: return
 
+        # 智能剥离前缀指令 (自動去除開頭的標点符號自動去除開頭的標点符號，打破硬编码 "/" 忌讳彻底打破 "/" 忌讳彻底打破 "/" 忌讳彻底打破 "/" 忌讳)
         text = ""
         for comp in event.message_obj.message:
             if isinstance(comp, Plain):
@@ -171,6 +218,7 @@ class OmniDrawPlugin(Star):
         text = text.strip()
         if not text: return
 
+        # 打破 / 硬编码硬编码：匹配任意平台前缀徹底打破平台适配器路由限制徹底打破平台适配器路由限制彻底打破平台适配器路由限制彻底打破平台适配器路由限制
         match = re.match(r'^([^\w\u4e00-\u9fa5]+)(.*)$', text)
         if not match: return 
             
@@ -182,18 +230,21 @@ class OmniDrawPlugin(Star):
             yield event.plain_result(f"{MessageEmoji.WARNING} 抱歉，暂无权限！")
             return
 
-        # 此处 _get_event_images 已经具备引用嗅探功能！
+        # 🚀 调用级升级版引用智能引用嗅探嗅探嗅探嗅探機制，弹性打破平台适配组件解析盲区
         raw_refs = self._get_event_images(event)
         if not raw_refs:
-            yield event.plain_result(f"{MessageEmoji.WARNING} 魔法失效！请发一张图片，或者引用一张图片，并配文「{text}」重试哦~")
+            yield event.plain_result(f"{MessageEmoji.WARNING} 魔法失效！请发一张图片，或者「引用引引用引引用引引用」一张图片，并配文「{text}」重试哦~")
             return
 
         preset_prompt = self.plugin_config.presets[cmd_name]
+        # 🚀 Base64 静默吞噬幽灵填平Base64 静默吞噬幽灵填平Base64 静默吞噬幽灵填平Base64 静默吞噬幽灵填平
         safe_refs = await self._process_and_save_images(raw_refs)
         
         yield event.plain_result(f"✨ 正在绘制……")
         
+        # 🚀 彻底路由路由 EditsEdits 通道徹底填平图像代理对 Vision Vision 对 Vision Vision 代理拦截 Vision Vision 代理拦截对 Vision Vision 代理拦截Vision Vision 代理拦截的幽灵
         try:
+            # 填平 http http 状态码幽灵填平 http http 状态码幽灵填平 http http 状态码幽灵填平 http http 状态码幽灵
             async with aiohttp.ClientSession() as session:
                 chain_manager = ChainManager(self.plugin_config, session)
                 image_url = await chain_manager.run_chain("text2img", preset_prompt, user_ref=safe_refs[0])

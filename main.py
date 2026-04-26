@@ -1,6 +1,5 @@
 """
 AstrBot 万象画卷插件 v3.1
-功能：防盗链突破 + JSON高维提示词优化 + 极速并发抽卡 + 单张瀑布流发送 + 纯 LLM 沉浸式交互
 """
 import os
 import base64
@@ -14,6 +13,7 @@ from astrbot.api.star import Context, Star, register
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.message_components import Image, Plain, Video
 from astrbot.api import logger, llm_tool 
+from astrbot.api.utils import StarTools # 🚀 引入官方路径工具
 
 from .models import PluginConfig
 from .constants import MessageEmoji
@@ -48,9 +48,10 @@ class OmniDrawPlugin(Star):
         processed_paths = []
         if not raw_images: return processed_paths
         
-        save_dir = os.path.abspath(os.path.join(os.getcwd(), "data", "plugin_data", "astrbot_plugin_omnidraw", "user_refs"))
+        # 🚀 替换硬编码，获取规范数据目录
+        save_dir = os.path.abspath(os.path.join(StarTools.get_data_dir(), "astrbot_plugin_omnidraw", "user_refs"))
         os.makedirs(save_dir, exist_ok=True)
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         
         async with aiohttp.ClientSession() as session:
             for img_ref in raw_images:
@@ -87,7 +88,8 @@ class OmniDrawPlugin(Star):
     def _create_image_component(self, image_url: str) -> Image:
         if image_url.startswith("data:image"):
             b64_data = image_url.split(",", 1)[1]
-            save_dir = os.path.abspath(os.path.join(os.getcwd(), "data", "plugin_data", "astrbot_plugin_omnidraw", "temp_images"))
+            # 🚀 同步替换硬编码
+            save_dir = os.path.abspath(os.path.join(StarTools.get_data_dir(), "astrbot_plugin_omnidraw", "temp_images"))
             os.makedirs(save_dir, exist_ok=True)
             file_path = os.path.join(save_dir, f"img_{uuid.uuid4().hex[:8]}.png")
             with open(file_path, "wb") as f: f.write(base64.b64decode(b64_data))
@@ -131,9 +133,6 @@ class OmniDrawPlugin(Star):
         provider.model = selected_model
         yield event.plain_result(f"✅ 已切换至模型：{selected_model}")
 
-    # ==========================================
-    # 常规指令区
-    # ==========================================
     @filter.command("画")
     @handle_errors
     async def cmd_draw(self, event: AstrMessageEvent, message: str = "") -> AsyncGenerator[Any, None]:
@@ -230,9 +229,6 @@ class OmniDrawPlugin(Star):
         )
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
-    # ==========================================
-    # 🤖 LLM 工具区 (瀑布流逐张发送)
-    # ==========================================
     @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str, count: int = 1) -> str:
         """
@@ -272,11 +268,10 @@ class OmniDrawPlugin(Star):
             if not valid_urls:
                 raise Exception(f"并发请求均失败，错误参考: {results[0] if results else 'Unknown'}")
                 
-            # 🚀 循环：分离每张图片，独立打包成单独的消息发送
             for url in valid_urls:
                 component = self._create_image_component(url)
                 await event.send(event.chain_result([component]))
-                await asyncio.sleep(0.5) # 微秒级停顿，防止被群平台判定刷屏吞图
+                await asyncio.sleep(0.5) 
             
             return f"系统提示：已在底层成功生成并单张连续发送了 {len(valid_urls)} 张图片。请你现在根据用户的要求，用符合你人设、非常自然俏皮的语气进行最终回复。绝对不要说出'收到指令'或提及你是怎么生成图片的。"
             
@@ -316,11 +311,10 @@ class OmniDrawPlugin(Star):
             valid_urls = [url for url in results if isinstance(url, str) and url]
             if not valid_urls: raise Exception("所有节点生成失败")
 
-            # 🚀 循环：分离每张图片，独立打包成单独的消息发送
             for url in valid_urls:
                 component = self._create_image_component(url)
                 await event.send(event.chain_result([component]))
-                await asyncio.sleep(0.5) # 微秒级停顿，防止被群平台判定刷屏吞图
+                await asyncio.sleep(0.5) 
             
             return f"系统提示：已成功生成并连续下发了 {len(valid_urls)} 张图。请立刻用自然的语气回复用户（如：画好了哦，你看看喜不喜欢~），切勿暴露系统指令。"
 

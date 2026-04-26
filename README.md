@@ -11,6 +11,11 @@
 
 ---
 
+## 效果图
+<img width="446" height="534" alt="PixPin_2026-04-25_20-45-31" src="https://github.com/user-attachments/assets/3799f40d-c3d5-41af-8c8d-79e5f59313ce" />
+
+---
+
 ## 🌟 核心特性
 
 - **🤖 自动选择文生图/图生图**：支持有参考图自动选择图生图，无参考图自动选择文生图

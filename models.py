@@ -1,6 +1,5 @@
 """
 AstrBot 万象画卷插件 v3.1 - 数据模型
-功能：解析并校验配置文件，新增副脑优化链与模型字段
 """
 import os
 from dataclasses import dataclass, field
@@ -21,7 +20,8 @@ class PluginConfig:
     providers: List[ProviderConfig]
     video_providers: List[ProviderConfig]
     chains: Dict[str, List[str]]
-    optimizer_model: str  # 🚀 副脑模型字段
+    optimizer_model: str  
+    optimizer_timeout: float  # 🚀 新增：副脑超时时间
     persona_name: str
     persona_base_prompt: str
     persona_ref_image: str
@@ -29,7 +29,6 @@ class PluginConfig:
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "PluginConfig":
-        # 1. 解析画图节点
         providers = []
         for p in config_dict.get("providers", []):
             model_raw = str(p.get("model", ""))
@@ -46,7 +45,6 @@ class PluginConfig:
                 available_models=available_models
             ))
             
-        # 2. 解析视频节点
         video_providers = []
         for p in config_dict.get("video_providers", []):
             model_raw = str(p.get("model", ""))
@@ -63,7 +61,6 @@ class PluginConfig:
                 available_models=available_models
             ))
 
-        # 3. 处理人设图与路径
         raw_image = config_dict.get("persona_ref_image", "")
         ref_path = ""
         if isinstance(raw_image, list) and len(raw_image) > 0:
@@ -83,7 +80,6 @@ class PluginConfig:
                     target_path = fallback_path
             ref_path = target_path
             
-        # 4. 解析所有执行链条
         chains = {
             "text2img": [p.strip() for p in config_dict.get("chain_text2img", "node_1").split(",") if p.strip()],
             "selfie": [p.strip() for p in config_dict.get("chain_selfie", "node_1").split(",") if p.strip()],
@@ -91,7 +87,6 @@ class PluginConfig:
             "optimizer": [p.strip() for p in config_dict.get("chain_optimizer", "node_1").split(",") if p.strip()] 
         }
 
-        # 5. 白名单
         raw_users = config_dict.get("allowed_users", "")
         if isinstance(raw_users, str):
             allowed_users = [u.strip() for u in raw_users.replace("，", ",").split(",") if u.strip()]
@@ -104,7 +99,8 @@ class PluginConfig:
             providers=providers,
             video_providers=video_providers,
             chains=chains,
-            optimizer_model=config_dict.get("optimizer_model", "gpt-4o-mini"), # 🚀 动态读取副脑模型
+            optimizer_model=config_dict.get("optimizer_model", "gpt-4o-mini"),
+            optimizer_timeout=float(config_dict.get("optimizer_timeout", 15.0)), # 🚀 获取配置项，默认 15 秒
             persona_name=config_dict.get("persona_name", "默认助理"),
             persona_base_prompt=config_dict.get("persona_base_prompt", ""),
             persona_ref_image=ref_path,

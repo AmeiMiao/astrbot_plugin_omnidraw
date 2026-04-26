@@ -1,6 +1,6 @@
 """
 AstrBot 万象画卷插件 v3.1
-功能：防盗链突破 + LLM 静默后台回显(不在群内刷屏) + 强化人设图传输
+功能：防盗链突破 + JSON高维提示词优化(副脑) + LLM 静默后台回显
 """
 import os
 import base64
@@ -22,6 +22,7 @@ from .core.chain_manager import ChainManager
 from .core.parser import CommandParser
 from .core.persona_manager import PersonaManager
 from .core.video_manager import VideoManager
+from .core.prompt_optimizer import PromptOptimizer  # 🚀 引入高级副脑
 
 @register("astrbot_plugin_omnidraw", "your_name", "万象画卷 v3.1 - 终极版", "3.1.0")
 class OmniDrawPlugin(Star):
@@ -31,9 +32,9 @@ class OmniDrawPlugin(Star):
         self.cmd_parser = CommandParser()
         self.persona_manager = PersonaManager(self.plugin_config)
         self.video_manager = VideoManager(self.plugin_config)
+        self.prompt_optimizer = PromptOptimizer(self.plugin_config) # 🚀 实例化副脑
 
     def _get_event_images(self, event: AstrMessageEvent) -> list:
-        """从消息中提取原始的图片路径或URL列表"""
         images = []
         for comp in event.message_obj.message:
             if isinstance(comp, Image):
@@ -45,7 +46,6 @@ class OmniDrawPlugin(Star):
         return images
 
     async def _process_images_to_base64(self, raw_images: list) -> list:
-        """将原始图片(网络/本地)强力转换为兼容 API 的 Base64"""
         processed = []
         if not raw_images:
             return processed
@@ -93,11 +93,9 @@ class OmniDrawPlugin(Star):
 
     def _has_permission(self, event: AstrMessageEvent) -> bool:
         allowed = self.plugin_config.allowed_users
-        if not allowed:
-            return True
+        if not allowed: return True
         sender_id = str(event.get_sender_id())
-        if sender_id in allowed:
-            return True
+        if sender_id in allowed: return True
         logger.warning(f"🚫 拦截无权限调用: {sender_id}")
         return False
 
@@ -150,7 +148,7 @@ class OmniDrawPlugin(Star):
         yield event.plain_result(f"✅ 已切换至模型：{selected_model}")
 
     # ==========================================
-    # 常规指令区 (保持指令回显给用户看)
+    # 常规指令区
     # ==========================================
     @filter.command("画")
     @handle_errors
@@ -163,7 +161,7 @@ class OmniDrawPlugin(Star):
         raw_refs = self._get_event_images(event)
         
         if not message and not raw_refs:
-            yield event.plain_result(f"{MessageEmoji.WARNING} 请输入提示词或附带一张参考图！")
+            yield event.plain_result(f"{MessageEmoji.WARNING} 请输入提示词或附带图！")
             return
             
         safe_refs = await self._process_images_to_base64(raw_refs)
@@ -194,7 +192,11 @@ class OmniDrawPlugin(Star):
             return
 
         user_input = message.strip() if message else "看着镜头微笑"
-        final_prompt, extra_kwargs = self.persona_manager.build_persona_prompt(user_input)
+        
+        # 🚀 在指令区也接入副脑优化（可选，如果不想要可以删掉这行，直接把 user_input 传给下面）
+        optimized_action = await self.prompt_optimizer.optimize(user_input)
+        
+        final_prompt, extra_kwargs = self.persona_manager.build_persona_prompt(optimized_action)
         
         persona_ref = extra_kwargs.get("user_ref", "")
         raw_refs = self._get_event_images(event)
@@ -211,7 +213,7 @@ class OmniDrawPlugin(Star):
             
         yield event.plain_result(
             f"{MessageEmoji.INFO} 正在为「{self.plugin_config.persona_name}」生成自拍...\n"
-            f"📝 最终提示词：{final_prompt}\n"
+            f"✨ 副脑已重构 {len(optimized_action.split(','))} 个特征维度\n"
             f"🖼️ 实际参考图：{actual_ref_count} 张"
         )
         
@@ -249,7 +251,7 @@ class OmniDrawPlugin(Star):
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
     # ==========================================
-    # 🤖 LLM 工具区 (静默化！回显转入后台日志！)
+    # 🤖 LLM 工具区 (拦截并优化自拍)
     # ==========================================
     @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str) -> str:
@@ -262,11 +264,14 @@ class OmniDrawPlugin(Star):
             return "系统提示：无权限调用。"
 
         try:
-            final_prompt, extra_kwargs = self.persona_manager.build_persona_prompt(action)
+            # 🚀 拦截点：将 LLM 发出的简单动作，交给副脑进行 JSON 维度重构！
+            optimized_action = await self.prompt_optimizer.optimize(action)
+            
+            final_prompt, extra_kwargs = self.persona_manager.build_persona_prompt(optimized_action)
+            
             persona_ref = extra_kwargs.get("user_ref", "")
             raw_refs = self._get_event_images(event)
             
-            # 🚀 第一步：优先安全处理并注入所有图片
             target_refs = raw_refs if raw_refs else ([persona_ref] if persona_ref else [])
             safe_refs = await self._process_images_to_base64(target_refs)
             
@@ -277,12 +282,10 @@ class OmniDrawPlugin(Star):
             else:
                 extra_kwargs.pop("user_ref", None)
                 
-            # 🚀 第二步：不打扰群友，在后台详细打桩打印！
             logger.info(f"📸 [LLM 工具调用] generate_selfie\n"
-                        f"📝 注入提示词：{final_prompt}\n"
+                        f"✨ 副脑已重构提示词，共 {len(optimized_action.split(','))} 个特征\n"
                         f"🖼️ 注入参考图：{actual_ref_count} 张")
 
-            # 🚀 第三步：携带完整参数正式请求 API
             chain_to_use = "selfie" if "selfie" in self.plugin_config.chains else "text2img"
             async with aiohttp.ClientSession() as session:
                 chain_manager = ChainManager(self.plugin_config, session)
@@ -307,15 +310,13 @@ class OmniDrawPlugin(Star):
         try:
             kwargs = {}
             raw_refs = self._get_event_images(event)
-            
-            # 🚀 优先注入图片
             safe_refs = await self._process_images_to_base64(raw_refs)
+            
             actual_ref_count = 0
             if safe_refs:
                 kwargs["user_ref"] = safe_refs[0]
                 actual_ref_count = 1
                 
-            # 🚀 后台精准打桩
             logger.info(f"🎨 [LLM 工具调用] generate_image\n"
                         f"📝 注入提示词：{prompt}\n"
                         f"🖼️ 注入参考图：{actual_ref_count} 张")
@@ -342,11 +343,8 @@ class OmniDrawPlugin(Star):
 
         try:
             raw_refs = self._get_event_images(event)
-            
-            # 🚀 优先注入图片
             safe_refs = await self._process_images_to_base64(raw_refs)
             
-            # 🚀 后台精准打桩
             logger.info(f"🎞️ [LLM 工具调用] generate_video\n"
                         f"📝 注入提示词：{prompt}\n"
                         f"🖼️ 注入参考图：{len(safe_refs)} 张")

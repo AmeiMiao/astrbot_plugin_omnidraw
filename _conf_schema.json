@@ -68,6 +68,7 @@
   "chain_video": { "description": "🎞️ 视频生成链路 (如: video_node_1)", "type": "string", "default": "video_node_1" },
   "chain_optimizer": { "description": "🧠 副脑优化链路 (调用哪个节点来扩写提示词)", "type": "string", "default": "node_1" },
   "optimizer_model": { "description": "🧠 副脑指定模型 (推荐极速模型，如 gpt-4o-mini)", "type": "string", "default": "gpt-4o-mini" },
+  "optimizer_timeout": { "description": "⏱️ 副脑思考超时时间 (秒，建议 8~15 之间)", "type": "string", "default": "15" },
   "persona_name": { "description": "🎭 我的名字 (AI助理的人设称呼)", "type": "string", "default": "默认助理" },
   "persona_base_prompt": { "description": "📝 我的外貌特征 (英文正向提示词)", "type": "text", "default": "masterpiece, best quality, 1girl" },
   "persona_ref_image": { "description": "👤 形象/人脸参考图 (直接点击上传)", "type": "file", "default": "" }

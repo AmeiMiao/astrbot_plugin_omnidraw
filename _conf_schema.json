@@ -1,42 +1,131 @@
 {
-  "allowed_users": {
+  "persona_name": {
+    "title": "助理人设名称",
+    "description": "机器人的自称，例如：默认助理、画师小雅等。大模型闲聊时会带入此身份。",
     "type": "string",
-    "title": "生图权限白名单 (QQ号)",
-    "description": "填入允许使用的QQ号，多个用英文逗号隔开。留空则默认全员可用。",
+    "default": "默认助理"
+  },
+  "persona_base_prompt": {
+    "title": "人设基础提示词 (Base Prompt)",
+    "description": "描述助理长相、穿搭等特征的纯英文提示词（例如: 1girl, white hair, blue eyes）。生成自拍时会自动拼接到最前面。",
+    "type": "string",
     "default": ""
   },
-  "providers": {
-    "description": "🔌 API 节点配置",
-    "type": "template_list",
-    "items": {
-      "type": "object",
-      "keys": {
-        "id": { "description": "节点ID", "type": "string", "default": "node_1" },
-        "api_type": { "description": "接口模式", "type": "string", "options": ["openai_image", "openai_chat"], "default": "openai_image" },
-        "base_url": { "description": "接口地址", "type": "string", "default": "https://api.openai.com/v1" },
-        "api_keys": { "description": "密钥池 (一行一个)", "type": "text", "default": "" },
-        "model": { "description": "模型名称", "type": "string", "default": "banana" },
-        "timeout": { "description": "超时时间 (秒)", "type": "string", "default": "60" }
-      }
-    },
-    "templates": {
-      "openai_node": {
-        "name": "➕ 添加节点",
-        "items": {
-          "id": { "description": "节点ID", "type": "string", "default": "node_1" },
-          "api_type": { "description": "接口模式", "type": "string", "options": ["openai_image", "openai_chat"], "default": "openai_image" },
-          "base_url": { "description": "接口地址", "type": "string", "default": "https://api.openai.com/v1" },
-          "api_keys": { "description": "密钥池", "type": "text", "default": "sk-xxxxxx" },
-          "model": { "description": "模型名称", "type": "string", "default": "banana" },
-          "timeout": { "description": "超时时间", "type": "string", "default": "60" }
-        }
-      }
-    },
-    "default": []
+  "persona_ref_image": {
+    "title": "人设参考图路径 (图生图)",
+    "description": "固定人设的参考图，填入本地路径（如 xxx.png）或网络 URL。留空则纯靠文字生成。",
+    "type": "string",
+    "default": ""
   },
-  "chain_text2img": { "description": "🎨 常规画图链路 (如: node_1)", "type": "string", "default": "node_1" },
-  "chain_selfie": { "description": "🤳 自拍专用链路 (需支持改图的节点)", "type": "string", "default": "node_1" },
-  "persona_name": { "description": "🎭 我的名字 (AI助理的人设称呼)", "type": "string", "default": "默认助理" },
-  "persona_base_prompt": { "description": "📝 我的外貌特征 (英文正向提示词)", "type": "text", "default": "masterpiece, best quality, 1girl" },
-  "persona_ref_image": { "description": "👤 形象/人脸参考图 (直接点击上传)", "type": "file", "default": "" }
+  "allowed_users": {
+    "title": "权限白名单 (QQ号)",
+    "description": "允许使用画图和视频功能的 QQ 号，多个号用英文逗号 `,` 分隔。如果留空，则群内所有人可用。",
+    "type": "string",
+    "default": ""
+  },
+  "chain_text2img": {
+    "title": "常规画图执行链",
+    "description": "输入执行常规 /画 任务的节点 ID，需与下方图片服务商中的 ID 对应。",
+    "type": "string",
+    "default": "node_1"
+  },
+  "chain_selfie": {
+    "title": "自拍画图执行链",
+    "description": "输入执行 /自拍 任务的节点 ID。",
+    "type": "string",
+    "default": "node_1"
+  },
+  "chain_video": {
+    "title": "视频生成执行链",
+    "description": "输入执行 /视频 任务的节点 ID，需与下方视频服务商中的 ID 对应。",
+    "type": "string",
+    "default": "video_node_1"
+  },
+  "providers": {
+    "title": "🎨 图片服务商节点配置",
+    "description": "配置常规的文生图、图生图接口（如 OpenAI, 硅基流动等中转站）。",
+    "type": "list",
+    "item_type": "object",
+    "keys": {
+      "id": {
+        "title": "节点 ID",
+        "description": "唯一标识符，执行链靠此 ID 绑定对应配置。",
+        "type": "string",
+        "default": "node_1"
+      },
+      "api_type": {
+        "title": "API 类型",
+        "description": "固定填写 openai_image（兼容市面大部分镜像站）。",
+        "type": "string",
+        "default": "openai_image"
+      },
+      "base_url": {
+        "title": "API 接口地址",
+        "description": "不带 /v1 的基础域名，如 https://api.siliconflow.cn",
+        "type": "string",
+        "default": "https://api.example.com"
+      },
+      "api_keys": {
+        "title": "API Keys",
+        "description": "填写你的密钥。支持填写多个实现多 Key 轮询，一行一个！",
+        "type": "string",
+        "default": "sk-xxxxx"
+      },
+      "model": {
+        "title": "画图模型名称 (支持多个)",
+        "description": "支持填写多个模型用英文逗号 `,` 隔开（例如：dall-e-3,flux）。排在第一位的默认生效，可在 QQ 中用 /切换模型 指令动态切换。",
+        "type": "string",
+        "default": "dall-e-3"
+      },
+      "timeout": {
+        "title": "请求超时时间 (秒)",
+        "description": "图片生成一般较快，建议 60-120 秒。",
+        "type": "number",
+        "default": 60
+      }
+    }
+  },
+  "video_providers": {
+    "title": "🎬 视频服务商节点配置",
+    "description": "配置长耗时的视频生成接口（后台挂机专享）。",
+    "type": "list",
+    "item_type": "object",
+    "keys": {
+      "id": {
+        "title": "节点 ID",
+        "type": "string",
+        "default": "video_node_1"
+      },
+      "api_type": {
+        "title": "API 类型",
+        "description": "固定填写 openai_video。",
+        "type": "string",
+        "default": "openai_video"
+      },
+      "base_url": {
+        "title": "API 接口地址",
+        "description": "不带 /v1 的基础域名。",
+        "type": "string",
+        "default": "https://api.example.com"
+      },
+      "api_keys": {
+        "title": "API Keys",
+        "description": "填写你的密钥，支持多行。",
+        "type": "string",
+        "default": "sk-xxxxx"
+      },
+      "model": {
+        "title": "视频模型名称 (支持多个)",
+        "description": "如 kling-v1,sora。多个用英文逗号 `,` 隔开，首个默认生效。",
+        "type": "string",
+        "default": "kling-v1"
+      },
+      "timeout": {
+        "title": "长连接超时时间 (秒)",
+        "description": "视频渲染极其耗时，建议设置为 300 (5分钟) 或更高，防断联。",
+        "type": "number",
+        "default": 300
+      }
+    }
+  }
 }

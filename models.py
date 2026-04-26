@@ -20,7 +20,7 @@ class PluginConfig:
     providers: List[ProviderConfig]
     video_providers: List[ProviderConfig]
     chains: Dict[str, List[str]]
-    presets: Dict[str, str]       # 🚀 新增预设字典
+    presets: Dict[str, str]       # 预设字典
     enable_optimizer: bool        
     optimizer_model: str  
     optimizer_timeout: float  
@@ -60,15 +60,19 @@ class PluginConfig:
                 available_models=available_models
             ))
 
-        # 🚀 解析预设库
+        # 🚀 解析单行预设库 (支持中文冒号或英文冒号分割)
         presets_dict = {}
         for p in config_dict.get("presets", []):
-            cmd = p.get("command", "").strip()
-            prompt = p.get("prompt", "").strip()
-            if cmd and prompt:
-                # 兼容用户配置时手抖带了斜杠的情况
-                if cmd.startswith("/"): cmd = cmd[1:]
-                presets_dict[cmd] = prompt
+            if isinstance(p, str):
+                separator = "：" if "：" in p else ":"
+                if separator in p:
+                    parts = p.split(separator, 1) # 只切分第一个冒号
+                    if len(parts) == 2:
+                        cmd = parts[0].strip()
+                        prompt = parts[1].strip()
+                        if cmd and prompt:
+                            if cmd.startswith("/"): cmd = cmd[1:]
+                            presets_dict[cmd] = prompt
 
         persona_conf = config_dict.get("persona_config", {})
         opt_conf = config_dict.get("optimizer_config", {})

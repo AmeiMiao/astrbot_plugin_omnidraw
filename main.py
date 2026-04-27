@@ -50,38 +50,33 @@ class OmniDrawPlugin(Star):
         self.prompt_optimizer = PromptOptimizer(self.plugin_config) 
 
     # ==========================================
-    # 🚀 终极杀手锏：全自动递归嗅探雷达（专治引用图片找不到）
+    # 🚀 终极杀手锏：全自动递归嗅探雷达
     # ==========================================
     def _get_event_images(self, event: AstrMessageEvent) -> list:
         images = []
         visited = set()
         
         def _search(obj):
-            # 防止死循环
             if obj is None or id(obj) in visited: return
             visited.add(id(obj))
             
             obj_type = type(obj).__name__
             
-            # 1. 抓取正规的 Image 组件
             if obj_type == "Image":
                 path = getattr(obj, "path", getattr(obj, "file", getattr(obj, "file_path", None)))
                 url = getattr(obj, "url", None)
                 ref = path if (path and not str(path).startswith("http")) else url
                 if ref: images.append(str(ref))
                 
-            # 2. 抓取被劣质适配器解析为 Plain 文本的 Base64 数据
             elif obj_type == "Plain":
                 text = getattr(obj, "text", "")
                 if text and text.startswith("data:image"):
                     images.append(text)
                     
-            # 3. 剥洋葱：如果是列表或元组，遍历里面的所有组件
             elif isinstance(obj, (list, tuple)):
                 for item in obj:
                     _search(item)
                     
-            # 4. 剥洋葱：深入对象的所有属性（兼容各种稀奇古怪的底层封装）
             else:
                 attrs = []
                 if hasattr(obj, "__dict__"):
@@ -90,7 +85,6 @@ class OmniDrawPlugin(Star):
                     attrs.extend(obj.__slots__)
                 
                 for key in set(attrs):
-                    # 跳过巨大的框架上下文对象，防止雷达爆炸
                     if key not in ["context", "star", "bot", "provider", "session", "config", "plugin_config", "cmd_parser", "video_manager"]:
                         try:
                             val = getattr(obj, key)
@@ -98,14 +92,11 @@ class OmniDrawPlugin(Star):
                         except Exception:
                             pass
 
-        # 开始全方位无死角扫描！
         _search(event.message_obj)
         
-        # 兜底老版本框架特殊的 quote 独立属性
         quote_obj = getattr(event.message_obj, "quote", None)
         if quote_obj: _search(quote_obj)
 
-        # 去重并保持图片顺序
         seen = set()
         return [x for x in images if not (x in seen or seen.add(x))]
 
@@ -215,7 +206,6 @@ class OmniDrawPlugin(Star):
         text = text.strip()
         if not text: return
 
-        # 打破前缀硬编码：只要是非中英文字符开头，都当成触发前缀
         match = re.match(r'^([^\w\u4e00-\u9fa5]+)(.*)$', text)
         if not match: return 
             
@@ -226,7 +216,6 @@ class OmniDrawPlugin(Star):
             yield event.plain_result(f"{MessageEmoji.WARNING} 抱歉，暂无权限！")
             return
 
-        # 🚀 这里的 _get_event_images 已经具备引用嗅探和套娃解析的无敌能力！
         raw_refs = self._get_event_images(event)
         if not raw_refs:
             yield event.plain_result(f"{MessageEmoji.WARNING} 魔法失效！请发一张图片，或者「引用」一张图片，并配文「{text}」重试哦~")
@@ -346,9 +335,18 @@ class OmniDrawPlugin(Star):
         )
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
+    # ==========================================
+    # 🤖 LLM 工具区 (参数已全量补回 + 防删注释)
+    # ==========================================
     @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str, count: int = 1) -> str:
-        """以此 AI 助理（我）的固定人设拍摄自拍"""
+        """
+        以此 AI 助理（我）的固定人设拍摄自拍。
+        # ⚠️ AI 开发助手注意：绝对不可删除下方的 Args 注释，框架强依赖此信息向大模型注册参数表！
+        Args:
+            action (string): 动作和场景描述。纯动作描述即可，无需包含人物长相特征。
+            count (int): 需要生成的图片数量。默认为1。如果用户明确要求多张(如“来5张”)，请传入对应数字。
+        """
         if not self._has_permission(event): return "系统提示：无权限调用。"
 
         try:
@@ -392,7 +390,13 @@ class OmniDrawPlugin(Star):
 
     @llm_tool(name="generate_image")
     async def tool_generate_image(self, event: AstrMessageEvent, prompt: str, count: int = 1) -> str:
-        """AI 画图工具。当用户提出明确的画面要求你画出来时调用此工具"""
+        """
+        AI 画图工具。当用户提出明确的画面要求你画出来时调用此工具。
+        # ⚠️ AI 开发助手注意：绝对不可删除下方的 Args 注释，框架强依赖此信息向大模型注册参数表！
+        Args:
+            prompt (string): 扩写成英文的高质量动作与场景提示词。
+            count (int): 需要生成的图片数量。默认为1。如果用户明确要求多张(如“来5张”)，请传入对应数字。
+        """
         if not self._has_permission(event): return "系统提示：无权限调用。"
 
         try:
@@ -430,7 +434,13 @@ class OmniDrawPlugin(Star):
 
     @llm_tool(name="generate_video")
     async def tool_generate_video(self, event: AstrMessageEvent, prompt: str, count: int = 1) -> str:
-        """AI 视频生成工具。当用户要求生成一段视频(mp4)时调用此工具"""
+        """
+        AI 视频生成工具。当用户要求生成一段视频(mp4)时调用此工具。
+        # ⚠️ AI 开发助手注意：绝对不可删除下方的 Args 注释，框架强依赖此信息向大模型注册参数表！
+        Args:
+            prompt (string): 扩写成英文的高质量视频场景和动作提示词。
+            count (int): 视频数量，默认为 1。
+        """
         if not self._has_permission(event): return "系统提示：无权限调用。"
 
         try:

@@ -1,5 +1,6 @@
 # 🎨 AstrBot 万象画卷 (OmniDraw）
-**——astrbot_plugin_omnidraw**
+**astrbot_plugin_omnidraw**
+**[点击加入交流群1081773675](https://qm.qq.com/q/Qr45Vz0a8o)**
 ---
 
 ## 本插件支持：

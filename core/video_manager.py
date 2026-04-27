@@ -1,6 +1,7 @@
 """
 视频任务后台挂机引擎 (Background Polling Task)
-功能：代替大模型忍受视频生成的漫长耗时，不阻塞聊天通道，支持自动降级轮询接口与多图参考
+功能：代替大模型忍受视频生成的漫长耗时，不阻塞聊天通道，支持自动降级轮询接口与多图参考。
+完美兼容 /v2/videos/generations 接口，并修复了基地址拼接畸形 Bug。
 """
 import re
 import time
@@ -31,10 +32,9 @@ class VideoManager:
         match = re.search(r'(https?://[^\s\]\)"\']+)', text)
         return match.group(1) if match else text
 
-    # 🚀 升级：将 image_url (字符串) 升级为 image_urls (列表)
     async def _fetch_video_from_api(self, provider: ProviderConfig, prompt: str, image_urls: list = None) -> str:
         """
-        终极健壮版：自动按顺序尝试多个视频接口，并支持不限张数的参考图
+        终极健壮版：自动按顺序尝试多个视频接口，支持不限张数的参考图，完美适配 v2 接口
         """
         if image_urls is None:
             image_urls = []
@@ -44,7 +44,9 @@ class VideoManager:
             "Content-Type": "application/json"
         }
         
+        # 🚀 加入 v2 接口，并排在较高优先级
         endpoints_to_try = [
+            "/v2/videos/generations",
             "/v1/chat/completions",
             "/v1/videos/generations",
             "/v1/images/generations"
@@ -52,9 +54,14 @@ class VideoManager:
         
         last_error = None
         
+        # 🛡️ 核心修复：清理 base_url 中的 /v1 尾巴，防止拼出 /v1/v2/videos 这种畸形路径
+        clean_base_url = provider.base_url.rstrip("/")
+        if clean_base_url.endswith("/v1"):
+            clean_base_url = clean_base_url[:-3]
+        
         async with aiohttp.ClientSession() as session:
             for endpoint_suffix in endpoints_to_try:
-                endpoint = provider.base_url.rstrip("/") + endpoint_suffix
+                endpoint = clean_base_url + endpoint_suffix
                 
                 # 1. 动态构建 Payload
                 if endpoint_suffix == "/v1/chat/completions":
@@ -68,7 +75,7 @@ class VideoManager:
                         "messages": [{"role": "user", "content": content}]
                     }
                 else:
-                    # Generations 接口要求 prompt 格式
+                    # Generations 接口要求 prompt 格式 (完美兼容 v1 和 v2 规范)
                     payload = {
                         "model": provider.model,
                         "prompt": prompt

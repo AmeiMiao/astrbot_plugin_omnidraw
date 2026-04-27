@@ -88,29 +88,34 @@
   },
   "video_providers": {
     "description": "🎬 API 视频节点配置",
-    "hint": "支持添加挂机渲染的长耗时视频节点",
+    "hint": "支持配置各大主流视频模型接口 (如 Kling, Luma, Runway, OpenAI 等)",
     "type": "template_list",
     "items": {
       "type": "object",
       "keys": {
         "id": { "description": "节点ID", "type": "string", "default": "video_node_1" },
-        "api_type": { "description": "接口模式", "type": "string", "options": ["openai_video"], "default": "openai_video" },
-        "base_url": { "description": "接口地址", "type": "string", "default": "https://api.example.com" },
+        "api_type": { 
+            "description": "接口模式 (核心)", 
+            "type": "string", 
+            "options": ["async_task", "openai_sync", "openai_chat"], 
+            "default": "async_task"
+        },
+        "base_url": { "description": "接口地址 (需包含版本号如 /v1 或 /v2)", "type": "string", "default": "https://api.example.com/v1" },
         "api_keys": { "description": "密钥池 (一行一个)", "type": "text", "default": "" },
-        "model": { "description": "视频模型名称 (多个用逗号隔开)", "type": "string", "default": "sora" },
-        "timeout": { "description": "长连接超时 (秒)", "type": "string", "default": "300" }
+        "model": { "description": "视频模型名称 (多个逗号隔开)", "type": "string", "default": "kling-v1" },
+        "timeout": { "description": "超时或最大轮询时间(秒)", "type": "string", "default": "300" }
       }
     },
     "templates": {
-      "openai_video_node": {
-        "name": "➕ 添加视频节点",
+      "kling_luma_node": {
+        "name": "➕ 添加异步视频节点 (Kling/Luma/Runway)",
         "items": {
-          "id": { "description": "节点ID", "type": "string", "default": "video_node_1" },
-          "api_type": { "description": "接口模式", "type": "string", "options": ["openai_video"], "default": "openai_video" },
-          "base_url": { "description": "接口地址", "type": "string", "default": "https://api.example.com" },
-          "api_keys": { "description": "密钥池", "type": "text", "default": "sk-xxxxxx" },
-          "model": { "description": "视频模型名称", "type": "string", "default": "sora" },
-          "timeout": { "description": "长连接超时时间", "type": "string", "default": "300" }
+          "id": { "type": "string", "default": "video_node_1" },
+          "api_type": { "type": "string", "options": ["async_task", "openai_sync", "openai_chat"], "default": "async_task" },
+          "base_url": { "type": "string", "default": "https://api.example.com/v1" },
+          "api_keys": { "type": "text", "default": "sk-xxxxxx" },
+          "model": { "type": "string", "default": "kling-v1" },
+          "timeout": { "type": "string", "default": "600" }
         }
       }
     },

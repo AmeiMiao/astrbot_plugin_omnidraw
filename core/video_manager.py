@@ -1,6 +1,6 @@
 """
 视频任务后台挂机引擎 (Background Polling Task)
-功能：修复了 AstrBot V4 底层发消息时 'Plain' 对象缺少 'chain' 属性的崩溃 Bug。
+功能：修复了部分魔改 API (如 "data" 为字典且使用 "output" 字段) 成功但获取不到 URL 的解析 Bug。
 """
 import re
 import time
@@ -75,14 +75,24 @@ class VideoManager:
                     logger.info(f"⏳ [视频轮询] Task ID: {task_id}, 状态: {status} (尝试 {attempt+1}/{max_retries})")
 
                     if status in ["SUCCESS", "SUCCEEDED", "COMPLETED"]:
-                        video_url = data.get("video_url", data.get("url", ""))
-                        if not video_url and "data" in data and isinstance(data["data"], list) and len(data["data"]) > 0:
-                            video_url = data["data"][0].get("url", "")
-                            
+                        # 🚀 无死角嗅探：支持最外层的 url, video_url, output
+                        video_url = data.get("video_url", data.get("url", data.get("output", "")))
+                        
+                        # 如果最外层没找到，去 "data" 字段里找
+                        if not video_url and "data" in data:
+                            data_field = data["data"]
+                            if isinstance(data_field, list) and len(data_field) > 0:
+                                # 兼容标准规范：data 是数组
+                                video_url = data_field[0].get("url", data_field[0].get("output", data_field[0].get("video_url", "")))
+                            elif isinstance(data_field, dict):
+                                # 兼容魔改规范：data 是字典（完美解决你截图中的 Bug）
+                                video_url = data_field.get("output", data_field.get("url", data_field.get("video_url", "")))
+                                
                         if video_url:
                             return video_url
                         else:
-                            raise VideoTaskError("任务显示成功，但未找到视频 URL！")
+                            # 加上返回的原始结构，以防未来还有更奇葩的格式
+                            raise VideoTaskError(f"任务显示成功，但未找到视频 URL！API 返回数据: {data}")
                             
                     elif status in ["FAIL", "FAILED", "FAILURE"]:
                         error_msg = data.get("error", data.get("message", "未知失败原因"))
@@ -150,9 +160,18 @@ class VideoManager:
                 async with session.post(endpoint, headers=headers, json=payload, timeout=provider.timeout) as resp:
                     resp.raise_for_status()
                     data = await resp.json()
-                    if "data" in data and len(data["data"]) > 0:
-                        return data["data"][0].get("url", "")
-                    raise VideoTaskError(f"Generations 返回值异常: {data}")
+                    
+                    # 同步接口的格式也一并加上无死角解析
+                    video_url = data.get("url", data.get("output", ""))
+                    if not video_url and "data" in data:
+                        if isinstance(data["data"], list) and len(data["data"]) > 0:
+                            video_url = data["data"][0].get("url", data["data"][0].get("output", ""))
+                        elif isinstance(data["data"], dict):
+                            video_url = data["data"].get("url", data["data"].get("output", ""))
+                            
+                    if video_url:
+                        return video_url
+                    raise VideoTaskError(f"Generations 同步返回值异常，未找到视频链接: {data}")
 
             elif api_type == "openai_chat":
                 endpoint = f"{base_url}/chat/completions"
@@ -173,7 +192,6 @@ class VideoManager:
             else:
                 raise ValueError(f"不受支持的接口模式: {api_type}，请在后台配置正确类型！")
 
-    # 🚀 修复核心：所有向用户发送纯文本的地方，全部使用 event.plain_result 包装！
     async def background_task_runner(self, event: AstrMessageEvent, prompt: str, image_urls: list = None):
         start_time = time.perf_counter()
         provider = self._get_active_video_provider()
@@ -199,7 +217,6 @@ class VideoManager:
         except VideoTaskError as ve:
             logger.error(f"❌ [后台任务] 视频生成被平台拦截阻断: {ve}")
             try:
-                # 🛡️ 修复崩溃：使用 event.plain_result
                 await event.send(event.plain_result(f"❌ 视频生成失败: {str(ve)}"))
             except Exception as send_err:
                 logger.error(f"⚠️ 无法将失败消息发送回聊天界面: {send_err}")
@@ -208,7 +225,6 @@ class VideoManager:
             err_msg = str(e) or repr(e)
             logger.error(f"❌ [后台任务] 渲染引擎发生崩溃异常: {err_msg}")
             try:
-                # 🛡️ 修复崩溃：使用 event.plain_result
                 await event.send(event.plain_result(f"❌ 后台视频渲染引擎发生错误：{err_msg}"))
             except Exception as send_err:
                 logger.error(f"⚠️ 无法将失败消息发送回聊天界面: {send_err}")

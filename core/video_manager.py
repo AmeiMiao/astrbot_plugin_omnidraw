@@ -1,6 +1,6 @@
 """
 视频任务后台挂机引擎 (Background Polling Task)
-功能：修复了上下文锁死导致的 30 秒超时 Bug，并增加了全量错误日志打印，彻底杜绝静默装死！
+功能：修复了 AstrBot V4 底层发消息时 'Plain' 对象缺少 'chain' 属性的崩溃 Bug。
 """
 import re
 import time
@@ -125,7 +125,6 @@ class VideoManager:
                 logger.info(f"🎬 [Async Task 模式] 提交视频任务至: {endpoint}")
                 task_id = None
                 
-                # 🚀 修复核心：拿到 task_id 后必须立即退出这个 async with，释放连接锁死！
                 async with session.post(endpoint, headers=headers, json=payload, timeout=30) as resp:
                     resp.raise_for_status()
                     data = await resp.json()
@@ -137,7 +136,6 @@ class VideoManager:
                     if not task_id:
                         raise VideoTaskError(f"提交成功但未找到任务 ID。API 原始返回: {data}")
                         
-                # ✅ 彻底释放 POST 连接后，再无后顾之忧地进入长循环轮询
                 logger.info(f"✅ 任务提交成功，获得 Task ID: {task_id}，即将进入轮询...")
                 return await self._poll_task_result(provider, str(task_id), session)
 
@@ -175,12 +173,13 @@ class VideoManager:
             else:
                 raise ValueError(f"不受支持的接口模式: {api_type}，请在后台配置正确类型！")
 
+    # 🚀 修复核心：所有向用户发送纯文本的地方，全部使用 event.plain_result 包装！
     async def background_task_runner(self, event: AstrMessageEvent, prompt: str, image_urls: list = None):
         start_time = time.perf_counter()
         provider = self._get_active_video_provider()
         
         if not provider:
-            await event.send(Plain("❌ 抱歉，管理员尚未配置可用的视频渲染节点。"))
+            await event.send(event.plain_result("❌ 抱歉，管理员尚未配置可用的视频渲染节点。"))
             return
 
         try:
@@ -195,13 +194,13 @@ class VideoManager:
                 ]))
             else:
                 logger.error("❌ 视频渲染失败：API 没有返回有效视频链接。")
-                await event.send(Plain("❌ 视频渲染失败：API 没有返回有效视频链接。"))
+                await event.send(event.plain_result("❌ 视频渲染失败：API 没有返回有效视频链接。"))
 
         except VideoTaskError as ve:
-            # 🚀 强制记录到底层控制台，绝不静默装死！
             logger.error(f"❌ [后台任务] 视频生成被平台拦截阻断: {ve}")
             try:
-                await event.send(Plain(f"❌ 视频生成失败: {str(ve)}"))
+                # 🛡️ 修复崩溃：使用 event.plain_result
+                await event.send(event.plain_result(f"❌ 视频生成失败: {str(ve)}"))
             except Exception as send_err:
                 logger.error(f"⚠️ 无法将失败消息发送回聊天界面: {send_err}")
                 
@@ -209,6 +208,7 @@ class VideoManager:
             err_msg = str(e) or repr(e)
             logger.error(f"❌ [后台任务] 渲染引擎发生崩溃异常: {err_msg}")
             try:
-                await event.send(Plain(f"❌ 后台视频渲染引擎发生错误：{err_msg}"))
+                # 🛡️ 修复崩溃：使用 event.plain_result
+                await event.send(event.plain_result(f"❌ 后台视频渲染引擎发生错误：{err_msg}"))
             except Exception as send_err:
                 logger.error(f"⚠️ 无法将失败消息发送回聊天界面: {send_err}")

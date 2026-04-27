@@ -1,6 +1,6 @@
 """
 AstrBot 万象画卷插件 v3.1
-功能：智能路由。带超强递归嗅探雷达，完美支持任意层级的“引用/回复”图片提取！
+功能：智能路由。新增动态链路切换与多维度模型无缝联动，保持雷达与LLM全能态！
 """
 import os
 import base64
@@ -159,46 +159,116 @@ class OmniDrawPlugin(Star):
         else:
             return Image.fromURL(image_url)
 
-    def _get_active_provider(self):
-        chain = self.plugin_config.chains.get("text2img", [])
-        if chain: return self.plugin_config.get_provider(chain[0])
-        if self.plugin_config.providers: return self.plugin_config.providers[0]
+    # 🚀 升级：支持多维度查询当前激活的节点
+    def _get_active_provider(self, chain_type: str = "text2img"):
+        chain = self.plugin_config.chains.get(chain_type, [])
+        if chain_type == "video":
+            if chain: return self.plugin_config.get_video_provider(chain[0])
+            if self.plugin_config.video_providers: return self.plugin_config.video_providers[0]
+        else:
+            if chain: return self.plugin_config.get_provider(chain[0])
+            if self.plugin_config.providers: return self.plugin_config.providers[0]
         return None
 
+    # ==========================================
+    # ⚙️ 指令与管理区
+    # ==========================================
     @filter.command("万象帮助")
     @handle_errors
     async def cmd_help(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
-        msg = "📖 万象画卷 v3.1\n/画 [提示词]\n/自拍 [动作描述]\n/切换模型 [序号]\n/视频 [提示词]\n\n"
+        msg = "📖 万象画卷 v3.1\n/画 [提示词]\n/自拍 [动作描述]\n/视频 [提示词]\n/切换链路 [画图/自拍/视频] [节点ID]\n/切换模型 [画图/自拍/视频] [序号]\n\n"
         if self.plugin_config.presets:
             msg += "✨ 极速预设 (带图/引用图片发送):\n"
             for p in self.plugin_config.presets.keys():
                 msg += f"/{p}\n"
         yield event.plain_result(msg)
 
-    @filter.command("切换模型")
+    @filter.command("切换链路")
     @handle_errors
-    async def cmd_switch_model(self, event: AstrMessageEvent, target: str = "") -> AsyncGenerator[Any, None]:
+    async def cmd_switch_chain(self, event: AstrMessageEvent, target_chain: str = "", target_node: str = "") -> AsyncGenerator[Any, None]:
         if not self._has_permission(event):
             yield event.plain_result(f"{MessageEmoji.WARNING} 暂无权限！")
             return
-        provider = self._get_active_provider()
-        if not provider or not provider.available_models:
-            yield event.plain_result(f"{MessageEmoji.WARNING} 未配置可用模型！")
+
+        chain_map = {"画图": "text2img", "自拍": "selfie", "视频": "video"}
+
+        if not target_chain or target_chain not in chain_map:
+            # 未提供参数，显示当前所有链路的状态
+            msg = "🔗 当前链路路由状态：\n"
+            for cn, ck in chain_map.items():
+                prov = self._get_active_provider(ck)
+                prov_id = prov.id if prov else "未配置"
+                msg += f"[{cn}]: 绑定节点 -> {prov_id}\n"
+            
+            msg += "\n🎨 可用生图节点: " + ", ".join([p.id for p in self.plugin_config.providers])
+            msg += "\n🎬 可用视频节点: " + ", ".join([p.id for p in self.plugin_config.video_providers])
+            msg += "\n\n💡 切换指令: /切换链路 [画图/自拍/视频] [节点ID]"
+            yield event.plain_result(msg)
             return
-        target = target.strip()
-        if not target:
-            msg = f"⚙️ 当前节点 [{provider.id}] 的可用模型：\n"
+
+        chain_key = chain_map[target_chain]
+        
+        # 验证要切换到的节点是否存在
+        new_provider = None
+        if chain_key == "video":
+            new_provider = self.plugin_config.get_video_provider(target_node)
+        else:
+            new_provider = self.plugin_config.get_provider(target_node)
+            
+        if not new_provider:
+            yield event.plain_result(f"{MessageEmoji.ERROR} 找不到节点 [{target_node}]！请检查配置。")
+            return
+
+        # 执行切换 (内存中修改)
+        self.plugin_config.chains[chain_key] = [target_node]
+        yield event.plain_result(f"✅ 成功将 [{target_chain}] 链路切换至节点: {target_node}\n💡 现在使用 /切换模型 {target_chain} 将显示该节点下的模型！")
+
+    @filter.command("切换模型")
+    @handle_errors
+    async def cmd_switch_model(self, event: AstrMessageEvent, arg1: str = "", arg2: str = "") -> AsyncGenerator[Any, None]:
+        if not self._has_permission(event):
+            yield event.plain_result(f"{MessageEmoji.WARNING} 暂无权限！")
+            return
+            
+        # 🚀 智能参数识别：支持 "/切换模型 2" 或 "/切换模型 视频 2"
+        target_chain = "画图"
+        target_idx = ""
+        
+        if arg1.isdigit():
+            target_idx = arg1
+        elif arg1 in ["画图", "自拍", "视频"]:
+            target_chain = arg1
+            target_idx = arg2
+        elif arg1:
+            yield event.plain_result(f"{MessageEmoji.ERROR} 无法识别的链路名。支持：画图 / 自拍 / 视频")
+            return
+
+        chain_map = {"画图": "text2img", "自拍": "selfie", "视频": "video"}
+        chain_key = chain_map[target_chain]
+        
+        provider = self._get_active_provider(chain_key)
+
+        if not provider or not provider.available_models:
+            yield event.plain_result(f"{MessageEmoji.WARNING} [{target_chain}] 链路当前绑定的节点暂无可用模型！")
+            return
+
+        if not target_idx:
+            msg = f"⚙️ [{target_chain}] 当前节点 [{provider.id}] 的可用模型：\n"
             for i, m in enumerate(provider.available_models):
                 is_active = " 👈(当前)" if m == provider.model else ""
                 msg += f"[{i+1}] {m}{is_active}\n"
+            msg += f"\n💡 指令: /切换模型 {target_chain if target_chain != '画图' else ''} [序号]"
             yield event.plain_result(msg)
             return
-        selected_model = target if target in provider.available_models else (provider.available_models[int(target)-1] if target.isdigit() and 0 <= int(target)-1 < len(provider.available_models) else None)
+
+        selected_model = target_idx if target_idx in provider.available_models else (provider.available_models[int(target_idx)-1] if target_idx.isdigit() and 0 <= int(target_idx)-1 < len(provider.available_models) else None)
+        
         if not selected_model:
             yield event.plain_result(f"{MessageEmoji.ERROR} 找不到该模型！")
             return
+            
         provider.model = selected_model
-        yield event.plain_result(f"✅ 已切换至模型：{selected_model}")
+        yield event.plain_result(f"✅ [{target_chain}] 已切换至模型：{selected_model}")
 
     # ==========================================
     # 🚀 预设雷达拦截器：兼容任意指令前缀

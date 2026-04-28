@@ -72,7 +72,8 @@ class PluginConfig:
             video_providers.append(ProviderConfig(
                 id=str(p.get("节点ID", p.get("id", "video_node_1"))),
                 api_type=str(p.get("接口模式", p.get("api_type", "async_task"))),
-                base_url=str(p.get("接口地址 (需含/v1)", p.get("base_url", "https://api.example.com/v1"))),
+                # 🚀 级联匹配：新中文名 -> 老中文名 -> 英文原名
+                base_url=str(p.get("接口地址 (需含/v1或/v2)", p.get("接口地址 (需含/v1)", p.get("base_url", "https://api.example.com/v1")))),
                 api_keys=api_keys,
                 model=available_models[0] if available_models else "",
                 timeout=float(p.get("超时时间(秒)", p.get("timeout", 300.0))),

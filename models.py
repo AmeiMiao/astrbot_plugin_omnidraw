@@ -1,6 +1,6 @@
 """
 AstrBot 万象画卷插件 v3.1 - 数据模型
-支持全中文 UI 变量映射与向后兼容。
+还原标准稳定结构。
 """
 import os
 from dataclasses import dataclass, field
@@ -35,29 +35,29 @@ class PluginConfig:
     def from_dict(cls, config_dict: Dict[str, Any], data_dir: str) -> "PluginConfig":
         providers = []
         for p in config_dict.get("providers", []):
-            model_raw = str(p.get("模型名称", p.get("model", "")))
+            model_raw = str(p.get("model", ""))
             available_models = [m.strip() for m in model_raw.replace("，", ",").split(",") if m.strip()]
             providers.append(ProviderConfig(
-                id=str(p.get("节点ID", p.get("id", ""))),
-                api_type=str(p.get("接口模式", p.get("api_type", "openai_image"))),
-                base_url=str(p.get("接口地址", p.get("base_url", ""))),
-                api_keys=[k.strip() for k in str(p.get("API密钥", p.get("api_keys", ""))).split("\n") if k.strip()],
+                id=str(p.get("id", "")),
+                api_type=str(p.get("api_type", "openai_image")),
+                base_url=str(p.get("base_url", "")),
+                api_keys=[k.strip() for k in str(p.get("api_keys", "")).split("\n") if k.strip()],
                 model=available_models[0] if available_models else "",
-                timeout=float(p.get("超时时间", p.get("timeout", 60.0))),
+                timeout=float(p.get("timeout", 60.0)),
                 available_models=available_models
             ))
             
         video_providers = []
         for p in config_dict.get("video_providers", []):
-            model_raw = str(p.get("模型名称", p.get("model", "")))
+            model_raw = str(p.get("model", ""))
             available_models = [m.strip() for m in model_raw.replace("，", ",").split(",") if m.strip()]
             video_providers.append(ProviderConfig(
-                id=str(p.get("节点ID", p.get("id", ""))),
-                api_type=str(p.get("接口模式", p.get("api_type", "async_task"))),
-                base_url=str(p.get("接口地址", p.get("base_url", ""))),
-                api_keys=[k.strip() for k in str(p.get("API密钥", p.get("api_keys", ""))).split("\n") if k.strip()],
+                id=str(p.get("id", "")),
+                api_type=str(p.get("api_type", "async_task")),
+                base_url=str(p.get("base_url", "")),
+                api_keys=[k.strip() for k in str(p.get("api_keys", "")).split("\n") if k.strip()],
                 model=available_models[0] if available_models else "",
-                timeout=float(p.get("超时时间", p.get("timeout", 300.0))),
+                timeout=float(p.get("timeout", 300.0)),
                 available_models=available_models
             ))
 

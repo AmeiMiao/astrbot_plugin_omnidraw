@@ -104,9 +104,9 @@
             ], 
             "default": "async_task (异步排队轮询 - 推荐Kling/Runway/Luma)"
         },
-        "base_url": { "description": "接口地址", "type": "string", "default": "https://api.example.com/v1" },
+        "base_url": { "description": "接口地址（末尾v1/v2/v3）", "type": "string", "default": "https://api.example.com/v1" },
         "api_keys": { "description": "密钥池 (一行一个)", "type": "text", "default": "" },
-        "model": { "description": "视频模型", "type": "string", "default": "kling-v1" },
+        "model": { "description": "视频模型", "type": "string", "default": "veo3.1-fast" },
         "timeout": { "description": "最大轮询时间(秒)", "type": "string", "default": "600" }
       }
     },
@@ -118,15 +118,15 @@
           "api_type": { 
               "type": "string", 
               "options": [
-                  "async_task (异步排队轮询 - 推荐Kling/Runway/Luma)", 
+                  "async_task (异步排队轮询/videos/generations)", 
                   "openai_sync (同步阻塞直返 - 适合Sora等官方接口)", 
-                  "openai_chat (对话伪装视频 - 适合各大中转API)"
+                  "openai_chat (对话伪装视频/chat/completions)"
               ], 
-              "default": "async_task (异步排队轮询 - 推荐Kling/Runway/Luma)" 
+              "default": "async_task (异步排队轮询/videos/generations)" 
           },
           "base_url": { "type": "string", "default": "https://api.example.com/v1" },
           "api_keys": { "type": "text", "default": "sk-xxxxxx" },
-          "model": { "type": "string", "default": "kling-v1" },
+          "model": { "type": "string", "default": "veo3.1-fast" },
           "timeout": { "type": "string", "default": "600" }
         }
       }

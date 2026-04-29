@@ -10,6 +10,7 @@ import time
 import aiohttp
 import asyncio
 import re
+import json
 from typing import AsyncGenerator, Any
 
 try:
@@ -518,6 +519,9 @@ class OmniDrawPlugin(Star):
             tasks = []
             async with aiohttp.ClientSession() as session:
                 for opt_action in optimized_actions:
+                    if opt_action.strip().startswith("{") and "HARDCODED_ANTI_COLLAGE_RULE" in opt_action:
+                        opt_action = PromptOptimizer.flatten_json_prompt(opt_action)
+                        logger.info(f"🔄 [Optimizer] JSON 提示词已转换为自然语言格式")
                     chain_manager = ChainManager(self.plugin_config, session)
                     tasks.append(chain_manager.run_chain("text2img", opt_action, **kwargs))
                 

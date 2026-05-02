@@ -27,66 +27,38 @@ class PromptOptimizer:
         endpoint = f"{base_url}/chat/completions" if base_url.endswith("/v1") else f"{base_url}/v1/chat/completions"
         headers = {"Authorization": f"Bearer {provider.api_keys[0]}", "Content-Type": "application/json"}
 
-        # 核心骨架（保留原有 Key 结构，深度增强对真实光影、人体解剖、镜头物理的约束）
+        # 🚀 降维打击：将深度嵌套的 JSON 彻底扁平化！
+        # 大模型在嵌套结构中极容易漏掉引号导致 line 3 报错。扁平化且强制全是 String，是最稳的格式，且完全不影响最终出图效果。
         base_json_struct = """{
-  "subject": {
-    "appearance": "flawless anatomical correctness, physically accurate human proportions, ultra-detailed skin texture, realistic pores, subtle natural micro-blemishes", 
-    "body_type": "...", 
-    "accessories": "..."
-  },
-  "clothing": {
-    "top": "[specify real-world fabric textures, e.g., thick knit, worn denim, wrinkled cotton]", 
-    "bottom": "...", 
-    "shoes": "..."
-  },
-  "pose_and_action": {
-    "pose": "[CRITICAL: EXACTLY ONE specific pose. NEVER use words like 'various', 'multiple', 'different angles'. Obey real-world gravity and physics]", 
-    "action": "[ONE specific action]", 
-    "gaze": "..."
-  },
-  "environment": {
-    "scene": "...", 
-    "furniture": "...", 
-    "decor": "...", 
-    "items": "..."
-  },
-  "lighting": {
-    "type": "physically accurate lighting (e.g., volumetric sunlight, cinematic chiaroscuro, Rembrandt lighting)", 
-    "source": "realistic light source direction with natural decay", 
-    "quality": "realistic shadows, global illumination, bounce light"
-  },
-  "styling_and_mood": {
-    "aesthetic": "...", 
-    "mood": "..."
-  },
-  "technical_specs": {
-    "camera_simulation": "specific real-world camera (e.g., ARRI Alexa 65, Hasselblad H6D, 35mm film)", 
-    "focal_length": "exact millimeter (e.g., 85mm macro, 24mm wide)", 
-    "aperture": "exact f-stop for realistic depth of field (e.g., f/1.4, f/8)", 
-    "quality_tags": ["single frame", "solo", "ultra photorealistic", "8k resolution", "award-winning photography", "raw photo", "physically based rendering"]
-  }
+  "subject_appearance": "flawless anatomical correctness, physically accurate human proportions, ultra-detailed skin texture, realistic pores",
+  "clothing_and_accessories": "specify real-world fabric textures like thick knit, worn denim",
+  "pose_and_action": "CRITICAL: EXACTLY ONE specific pose. NEVER use words like various or multiple. Obey real-world gravity.",
+  "environment_and_scene": "describe the specific location, atmosphere, and props",
+  "lighting_and_mood": "physically accurate lighting like volumetric sunlight, cinematic chiaroscuro, realistic shadows",
+  "technical_specs": "specific real-world camera like ARRI Alexa 65, focal length, aperture, single frame, solo, ultra photorealistic, raw photo"
 }"""
 
         if count == 1:
             sys_prompt = f"""You are an elite Cinematographer, Anatomist, and AI Prompt Engineer.
 Output ONLY ONE valid JSON object based on the user's action.
 CRITICAL RULES:
-1. Output MUST be a valid JSON object.
-2. ABSOLUTELY NO collages, grids, or multiple views. Describe exactly ONE single frozen moment.
-3. HYPER-REALISM RULE: Ensure strict anatomical correctness, real-world physics (gravity/fabric folds), and physically accurate lighting (shadows, light bounce).
-4. Do NOT use cartoonish or stylized descriptions unless explicitly requested by the user. Focus on real-world photographic precision.
+1. Output MUST be a valid JSON object. ALL keys and values MUST be strings.
+2. Escape any inner double quotes with a backslash (\\"). Do NOT use unescaped quotes inside strings.
+3. ABSOLUTELY NO collages, grids, or multiple views. Describe exactly ONE single frozen moment.
+4. HYPER-REALISM RULE: Ensure strict anatomical correctness, real-world physics, and physically accurate lighting.
+5. Do NOT use cartoonish descriptions unless explicitly requested. Focus on real-world photographic precision.
+OUTPUT FORMAT (Use these exact keys):
 {base_json_struct}"""
         else:
             sys_prompt = f"""You are an elite Cinematographer, Anatomist, and AI Prompt Engineer.
 Generate EXACTLY {count} distinct variations of the user's action.
 CRITICAL RULES:
-1. Output MUST be a JSON object containing a "results" array: {{"results": [...]}}
-2. The "results" array must contain exactly {count} objects.
+1. Output MUST be a valid JSON object containing a "results" array. ALL keys and values MUST be strings.
+2. Escape any inner double quotes with a backslash (\\"). Do NOT use unescaped quotes inside strings.
 3. ANTI-COLLAGE RULE: Each JSON object represents ONE SINGLE IMAGE. Pick exactly ONE specific pose and ONE camera angle per object!
-4. Ensure `subject` and `clothing` remain identical across all objects, but vary the `technical_specs`, `pose`, and `environment`.
-5. HYPER-REALISM RULE: Strictly enforce real-world anatomical proportions, physically accurate lighting, and authentic lens behaviors (depth of field, focal length).
+4. Ensure subject appearance remains identical across all objects, but vary technical specs, pose, and environment.
 
-Format:
+OUTPUT FORMAT:
 {{
   "results": [
     {base_json_struct},
@@ -114,14 +86,22 @@ Format:
                     if "choices" in data and len(data["choices"]) > 0:
                         raw_content = data["choices"][0]["message"]["content"].strip()
                         
-                        # 🚀 核心修复：安全清洗 Markdown，避免三个反引号导致复制截断
-                        block_mark = "`" * 3
-                        raw_content = re.sub(rf"^{block_mark}(?:json)?\s*", "", raw_content, flags=re.IGNORECASE)
-                        raw_content = re.sub(rf"\s*{block_mark}$", "", raw_content)
-                        raw_content = raw_content.strip()
+                        # 🚀 终极防弹提取：无视大模型所有的前置和后置废话
+                        start_idx = raw_content.find('{')
+                        end_idx = raw_content.rfind('}')
+                        
+                        if start_idx != -1 and end_idx != -1 and end_idx >= start_idx:
+                            clean_json_str = raw_content[start_idx:end_idx+1]
+                        else:
+                            clean_json_str = raw_content
+                            
+                        # 🚀 极限容错：提前用 Python 修复大模型最爱犯的 3 种低级语法错误
+                        clean_json_str = clean_json_str.replace('\n', ' ').replace('\r', '') # 1. 修复字符串内未转义换行符导致的报错
+                        clean_json_str = re.sub(r',\s*}', '}', clean_json_str)               # 2. 修复结尾多余的逗号
+                        clean_json_str = re.sub(r',\s*]', ']', clean_json_str)               # 3. 修复数组结尾多余的逗号
                         
                         try:
-                            prompt_data = json.loads(raw_content)
+                            prompt_data = json.loads(clean_json_str)
                             results = []
                             
                             items = []
@@ -133,7 +113,7 @@ Format:
                                     items = prompt_data
                                     
                             for item in items:
-                                # 🚀 终极防拼图锁死 (采用括号安全折行拼接，防止 IDE 自动换行引发报错)
+                                # 🚀 终极防拼图锁死 (安全折行拼接)
                                 item["HARDCODED_ANTI_COLLAGE_RULE"] = (
                                     "1girl, solo, single image, one single frame, complete and unified scene, "
                                     "NO grid, NO collage, NO split screen, NO character sheet, NO multiple views, NO comic panels"
@@ -149,7 +129,8 @@ Format:
                             return results[:count]
                             
                         except Exception as e:
-                            logger.warning(f"⚠️ [副脑] 原生 JSON 解析提取失败: {e}")
+                            # 如果再次失败，打印出到底大模型写了什么垃圾，方便排查
+                            logger.warning(f"⚠️ [副脑] 原生 JSON 解析失败: {e} | 原始残骸: {clean_json_str[:200]}...")
                             return [raw_action] * count
             except Exception as e:
                 logger.warning(f"⚠️ [副脑降级] ({str(e)})")

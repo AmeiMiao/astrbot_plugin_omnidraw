@@ -1,7 +1,6 @@
 """
 AstrBot 万象画卷插件 v3.1 - 数据模型
 采用极简安全循环，完美兼容全新的中文 UI 标签与历史遗留英文标签。
-支持多模态参考图数组。
 """
 import os
 from dataclasses import dataclass, field
@@ -29,7 +28,8 @@ class PluginConfig:
     max_batch_count: int      
     persona_name: str
     persona_base_prompt: str
-    persona_ref_image: List[str]  # 🚀 这里正式升级为 List[str]
+    persona_ref_image: str          # 🛡️ 兼容旧版组件的单图字符串
+    persona_ref_images: List[str]   # 🚀 新版多图数组机制
     allowed_users: List[str]
     optimizer_style: str
     optimizer_custom_prompt: str
@@ -83,7 +83,7 @@ class PluginConfig:
         router_conf = config_dict.get("router_config", {})
         perm_conf = config_dict.get("permission_config", {})
 
-        # 🚀 核心修复：完美支持多图数组的安全解析
+        # 💡 安全解析多图数组
         raw_images = persona_conf.get("persona_ref_image", [])
         if isinstance(raw_images, str):
             raw_images = [raw_images] if raw_images.strip() else []
@@ -98,7 +98,6 @@ class PluginConfig:
                 continue
                 
             img_path = img_path.strip()
-            # 兼容 Base64 或 网络图片 或 已经是绝对路径
             if img_path.startswith("data:image") or img_path.startswith("http") or os.path.isabs(img_path):
                 processed_ref_paths.append(img_path)
             else:
@@ -132,7 +131,8 @@ class PluginConfig:
             max_batch_count=int(opt_conf.get("max_batch_count", 0)),
             persona_name=str(persona_conf.get("persona_name", "默认助理")),
             persona_base_prompt=str(persona_conf.get("persona_base_prompt", "")),
-            persona_ref_image=processed_ref_paths, # 传入安全解析后的数组
+            persona_ref_image=processed_ref_paths[0] if processed_ref_paths else "", # 给旧组件用的降级字符串
+            persona_ref_images=processed_ref_paths, # 给新功能用的多图数组
             allowed_users=allowed_users,
             optimizer_style=str(opt_conf.get("optimizer_style", "手机日常原生感")),
             optimizer_custom_prompt=str(opt_conf.get("optimizer_custom_prompt", ""))

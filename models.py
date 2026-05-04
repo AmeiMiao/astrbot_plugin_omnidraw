@@ -101,15 +101,9 @@ class PluginConfig:
         router_conf = config_dict.get("router_config", {})
         perm_conf = config_dict.get("permission_config", {})
 
-        raw_image = persona_conf.get("persona_ref_image", "")
-        ref_path = ""
-        if isinstance(raw_image, list) and len(raw_image) > 0: 
-            raw_image = raw_image[0]
-            
-        if isinstance(raw_image, dict):
-            ref_path = raw_image.get("path") or raw_image.get("url") or raw_image.get("file") or ""
-        elif isinstance(raw_image, str): 
-            ref_path = raw_image.strip()
+        raw_images = persona_conf.get("persona_ref_image", [])
+        if isinstance(raw_images, str): raw_images = [raw_images] if raw_images.strip() else []
+        ref_path = raw_images # 现在 ref_path 变成了一个列表，可以直接喂给大模型
             
         if ref_path and not ref_path.startswith("http") and not os.path.isabs(ref_path):
             target_path = os.path.abspath(os.path.join(data_dir, ref_path))

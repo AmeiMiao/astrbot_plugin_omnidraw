@@ -10,6 +10,7 @@ import time
 import aiohttp
 import asyncio
 import re
+import json  # 💡 新增：用于彻底持久化落盘
 from typing import AsyncGenerator, Any
 
 from quart import jsonify, request
@@ -46,8 +47,21 @@ class OmniDrawPlugin(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
         self.data_dir = str(StarTools.get_data_dir())
-        self.raw_config = config or {}
         
+        # 💡 [持久化核心 1]：定义属于我们自己的硬核配置存放路径，保证重启/更新不丢！
+        self.config_path = os.path.join(self.data_dir, "omnidraw_persist_config.json")
+        
+        # 💡 [持久化核心 2]：启动时主动读取。如果有我们自己保存过的文件，直接覆盖掉系统给的空配置
+        if os.path.exists(self.config_path):
+            try:
+                with open(self.config_path, "r", encoding="utf-8") as f:
+                    self.raw_config = json.load(f)
+            except Exception as e:
+                logger.error(f"[OmniDraw] 读取本地持久化配置失败: {e}")
+                self.raw_config = config or {}
+        else:
+            self.raw_config = config or {}
+            
         self.plugin_config = PluginConfig.from_dict(self.raw_config, self.data_dir)
         self.cmd_parser = CommandParser()
         self.persona_manager = PersonaManager(self.plugin_config)
@@ -68,9 +82,23 @@ class OmniDrawPlugin(Star):
         self.video_manager = VideoManager(self.plugin_config)
         self.prompt_optimizer = PromptOptimizer(self.plugin_config)
         
+        # 💡 [持久化核心 3]：接收到前端数据后，立刻将其死死钉进物理硬盘
+        try:
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                json.dump(self.raw_config, f, ensure_ascii=False, indent=4)
+            logger.info(f"[OmniDraw] 配置已成功持久化落盘至: {self.config_path}")
+        except Exception as e:
+            logger.error(f"[OmniDraw] 配置文件持久化写入失败: {e}")
+            return jsonify({"success": False, "message": f"硬盘写入失败: {e}"})
+        
+        # 通知框架层级 (防部分旧版框架卡死)
         if hasattr(self.context, 'update_config'):
-            self.context.update_config(new_config)
-        return jsonify({"success": True, "message": "配置已热重载生效"})
+            try:
+                self.context.update_config(new_config)
+            except Exception:
+                pass
+                
+        return jsonify({"success": True, "message": "配置已落盘，热重载生效"})
 
     def _get_event_images(self, event: AstrMessageEvent) -> list:
         images = []
@@ -192,7 +220,6 @@ class OmniDrawPlugin(Star):
             msg += "✨ 极速宏:\n" + "\n".join([f"/{p}" for p in self.plugin_config.presets.keys()])
         yield event.plain_result(msg)
 
-    # 💡 还原了默认参数，防止用户少输参数导致 AstrBot 崩溃
     @filter.command("切换链路")
     @handle_errors
     async def cmd_switch_chain(self, event: AstrMessageEvent, target: str = "", node_id: str = "") -> AsyncGenerator[Any, None]:
@@ -216,11 +243,17 @@ class OmniDrawPlugin(Star):
             
         self.plugin_config.chains[chain_key] = [node_id]
         self.raw_config.setdefault("router_config", {})[f"chain_{chain_key}"] = node_id
+        
+        # 同步写入物理硬盘保存当前切换状态
+        try:
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                json.dump(self.raw_config, f, ensure_ascii=False, indent=4)
+        except Exception: pass
+            
         if hasattr(self.context, 'update_config'):
             self.context.update_config(self.raw_config)
         yield event.plain_result(f"{MessageEmoji.SUCCESS} 已将 {target} 链路切换至节点: {node_id}")
 
-    # 💡 还原了默认参数
     @filter.command("切换模型")
     @handle_errors
     async def cmd_switch_model(self, event: AstrMessageEvent, target: str = "", model_idx: str = "") -> AsyncGenerator[Any, None]:
@@ -267,6 +300,12 @@ class OmniDrawPlugin(Star):
                 p_dict["model"] = selected_model
                 break
                 
+        # 同步写入物理硬盘保存当前切换状态
+        try:
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                json.dump(self.raw_config, f, ensure_ascii=False, indent=4)
+        except Exception: pass
+                
         if hasattr(self.context, 'update_config'):
             self.context.update_config(self.raw_config)
         yield event.plain_result(f"{MessageEmoji.SUCCESS} 已将 {target} 节点 ({prov.id}) 默认模型切换为: {selected_model}")
@@ -299,7 +338,6 @@ class OmniDrawPlugin(Star):
         except Exception as e:
             yield event.plain_result(f"💥 绘制失败: {e}")
 
-    # 💡 还原了 p1~p10 参数列
     @filter.command("画")
     @handle_errors
     async def cmd_draw(self, event: AstrMessageEvent, p1: str="", p2: str="", p3: str="", p4: str="", p5: str="", p6: str="", p7: str="", p8: str="", p9: str="", p10: str="") -> AsyncGenerator[Any, None]:
@@ -324,7 +362,6 @@ class OmniDrawPlugin(Star):
             image_url = await chain_manager.run_chain("text2img", prompt, **kwargs)
         yield event.chain_result([self._create_image_component(image_url)])
 
-    # 💡 还原了 p1~p10 参数列
     @filter.command("自拍")
     @handle_errors
     async def cmd_selfie(self, event: AstrMessageEvent, p1: str="", p2: str="", p3: str="", p4: str="", p5: str="", p6: str="", p7: str="", p8: str="", p9: str="", p10: str="") -> AsyncGenerator[Any, None]:
@@ -358,7 +395,6 @@ class OmniDrawPlugin(Star):
             image_url = await chain_manager.run_chain(chain_to_use, final_prompt, **extra_kwargs)
         yield event.chain_result([self._create_image_component(image_url)])
 
-    # 💡 还原了 p1~p10 参数列
     @filter.command("视频")
     @handle_errors
     async def cmd_video(self, event: AstrMessageEvent, p1: str="", p2: str="", p3: str="", p4: str="", p5: str="", p6: str="", p7: str="", p8: str="", p9: str="", p10: str="") -> AsyncGenerator[Any, None]:
@@ -377,18 +413,12 @@ class OmniDrawPlugin(Star):
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
     # ==========================================
-    # 🤖 LLM 工具区 (💡全部恢复了所有大模型透传参数)
+    # 🤖 LLM 工具区 
     # ==========================================
     @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str, count: int = 1, aspect_ratio: str = "", size: str = "", extra_params: str = "") -> str:
         """
         以此 AI 助理的固定人设拍摄自拍。
-        Args:
-            action (string): 动作和场景描述。
-            count (int): 需要生成的图片数量。默认为1。
-            aspect_ratio (string): 宽高比例。
-            size (string): 分辨率。
-            extra_params (string): 附加模型参数透传。
         """
         if not self._has_permission(event): return "无权限调用。"
         try:
@@ -408,7 +438,6 @@ class OmniDrawPlugin(Star):
                         extra_kwargs["user_refs"] = safe_refs
                         if not raw_refs: extra_kwargs.pop("persona_ref", None)
                     
-                    # 💡 重新接驳额外参数
                     if aspect_ratio: extra_kwargs["aspect_ratio"] = aspect_ratio
                     if size: extra_kwargs["size"] = size
                     if extra_params:
@@ -432,13 +461,7 @@ class OmniDrawPlugin(Star):
     @llm_tool(name="generate_image")
     async def tool_generate_image(self, event: AstrMessageEvent, prompt: str, count: int = 1, aspect_ratio: str = "", size: str = "", extra_params: str = "") -> str:
         """
-        AI 画图工具。当用户提出明确的画面要求你画出来时调用此工具。
-        Args:
-            prompt (string): 提示词。
-            count (int): 图片数量。默认为1。
-            aspect_ratio (string): 宽高比例。
-            size (string): 分辨率。
-            extra_params (string): 其他参数。
+        AI 画图工具。
         """
         if not self._has_permission(event): return "无权限调用。"
         try:
@@ -447,7 +470,6 @@ class OmniDrawPlugin(Star):
             safe_refs = await self._process_and_save_images(self._get_event_images(event))
             
             kwargs = {"user_refs": safe_refs} if safe_refs else {}
-            # 💡 重新接驳额外参数
             if aspect_ratio: kwargs["aspect_ratio"] = aspect_ratio
             if size: kwargs["size"] = size
             if extra_params:
@@ -472,20 +494,13 @@ class OmniDrawPlugin(Star):
     @llm_tool(name="generate_video")
     async def tool_generate_video(self, event: AstrMessageEvent, prompt: str, count: int = 1, aspect_ratio: str = "", size: str = "", extra_params: str = "") -> str:
         """
-        AI 视频生成工具。当用户要求生成一段视频时调用。
-        Args:
-            prompt (string): 视频提示词。
-            count (int): 视频数量，默认为 1。
-            aspect_ratio (string): 宽高比例。
-            size (string): 分辨率。
-            extra_params (string): 附加参数，透传至底层引擎。
+        AI 视频生成工具。
         """
         if not self._has_permission(event): return "无权限调用。"
         try:
             count = min(max(1, self._normalize_count(count)), self.plugin_config.max_batch_count or 10)
             safe_refs = await self._process_and_save_images(self._get_event_images(event))
             
-            # 💡 重新接驳并组合视频额外参数
             full_prompt = prompt
             if aspect_ratio: full_prompt += f" --ar {aspect_ratio}"
             if size: full_prompt += f" --size {size}"

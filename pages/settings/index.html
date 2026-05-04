@@ -2,6 +2,181 @@
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8" />
+    <title>万象画卷 - 偏好设置</title>
+    <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+    <div class="layout-wrapper">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <div class="brand-icon">✨</div>
+                    <h1>万象画卷</h1>
+                </div>
+                <span class="version-badge">Version 3.1</span>
+            </div>
+            
+            <nav class="nav-menu">
+                <button class="nav-item active" data-target="tab-basic">
+                    <span class="nav-icon">⚲</span> 基础与人设
+                </button>
+                <button class="nav-item" data-target="tab-optimizer">
+                    <span class="nav-icon">✧</span> 副脑引擎
+                </button>
+                <button class="nav-item" data-target="tab-nodes">
+                    <span class="nav-icon">⌘</span> API 节点
+                </button>
+            </nav>
+
+            <div class="save-panel">
+                <button data-action="save-config" class="btn-primary">
+                    保存更改
+                </button>
+            </div>
+        </aside>
+
+        <main class="content">
+            <div id="tab-basic" class="tab-pane active">
+                <div class="page-header">
+                    <h2>基础配置</h2>
+                    <p>管理使用权限、指令路由及 AI 助理的默认人设。</p>
+                </div>
+                
+                <div class="grid-row">
+                    <section class="card">
+                        <div class="card-header"><h3>🛡️ 访问与路由</h3></div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>许可 QQ 号 (逗号分隔，留空则全员开放)</label>
+                                <input type="text" id="perm_allowed_users" class="input-modern" placeholder="例: 12345,67890" />
+                            </div>
+                            <div class="divider"></div>
+                            <div class="form-group">
+                                <label>图生图节点指向 (chain_text2img)</label>
+                                <input type="text" id="route_img" class="input-modern" />
+                            </div>
+                            <div class="form-group">
+                                <label>自拍节点指向 (chain_selfie)</label>
+                                <input type="text" id="route_selfie" class="input-modern" />
+                            </div>
+                            <div class="form-group">
+                                <label>视频节点指向 (chain_video)</label>
+                                <input type="text" id="route_video" class="input-modern" />
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="card">
+                        <div class="card-header"><h3>🎭 人设外观档案</h3></div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>助理称呼</label>
+                                <input type="text" id="persona_name" class="input-modern" placeholder="默认助理" />
+                            </div>
+                            <div class="form-group">
+                                <label>基底特征提示词 (Base Prompt)</label>
+                                <textarea id="persona_prompt" rows="3" class="input-modern" placeholder="描述外貌特征..."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>参考图 (绝对路径 或 URL)</label>
+                                <input type="text" id="persona_ref" class="input-modern" placeholder="https://..." />
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <div id="tab-optimizer" class="tab-pane">
+                <div class="page-header">
+                    <h2>副脑引擎</h2>
+                    <p>配置语言模型作为指令扩写中枢，并管理快捷魔法预设。</p>
+                </div>
+
+                <section class="card">
+                    <div class="card-header space-between">
+                        <h3>🧠 Prompt Optimizer</h3>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="opt_enable">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="card-body grid-2-col">
+                        <div class="form-group">
+                            <label>副脑预设画风</label>
+                            <select id="opt_style" class="input-modern select-modern">
+                                <option value="手机日常原生感">手机日常原生感</option>
+                                <option value="自拍专用极致真实">自拍专用极致真实</option>
+                                <option value="电影级光影大片">电影级光影大片</option>
+                                <option value="日系插画大师">日系插画大师</option>
+                                <option value="3D 潮玩盲盒">3D 潮玩盲盒</option>
+                                <option value="自定义模式">自定义模式</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>处理节点</label>
+                            <input type="text" id="opt_chain" class="input-modern" />
+                        </div>
+                        <div class="form-group">
+                            <label>核心模型 (推荐 gpt-4o-mini)</label>
+                            <input type="text" id="opt_model" class="input-modern" />
+                        </div>
+                        <div class="form-group">
+                            <label>单次请求超时 (秒)</label>
+                            <input type="number" id="opt_timeout" class="input-modern" />
+                        </div>
+                        <div class="form-group full-width">
+                            <label>并发生成上限 (0 为无限制)</label>
+                            <input type="number" id="opt_batch" class="input-modern" />
+                        </div>
+                        <div class="form-group full-width">
+                            <label>自定义神经注入 (仅选择“自定义模式”时生效)</label>
+                            <textarea id="opt_custom" rows="2" class="input-modern" placeholder="补充特定的画面要求..."></textarea>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <div class="card-header space-between">
+                        <h3>✨ 快捷预设指令</h3>
+                        <button data-action="add-preset" class="btn-secondary btn-small">添加预设</button>
+                    </div>
+                    <div class="card-body list-container" id="presets-container"></div>
+                </section>
+            </div>
+
+            <div id="tab-nodes" class="tab-pane">
+                <div class="page-header">
+                    <h2>API 节点</h2>
+                    <p>管理底层调用的绘图与视频大模型接口配置。</p>
+                </div>
+
+                <section class="card">
+                    <div class="card-header space-between">
+                        <h3>🎨 生图服务节点</h3>
+                        <button data-action="add-provider" class="btn-secondary btn-small">添加节点</button>
+                    </div>
+                    <div class="card-body list-container" id="providers-container"></div>
+                </section>
+
+                <section class="card">
+                    <div class="card-header space-between">
+                        <h3>🎬 视频服务节点</h3>
+                        <button data-action="add-video-provider" class="btn-secondary btn-small">添加节点</button>
+                    </div>
+                    <div class="card-body list-container" id="video-providers-container"></div>
+                </section>
+            </div>
+
+        </main>
+    </div>
+
+    <div id="toast-container"></div>
+    <script type="module" src="./app.js"></script>
+</body>
+</html><!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
     <title>万象画卷 - 全息控制台</title>
     <link rel="stylesheet" href="./style.css" />
 </head>

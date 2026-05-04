@@ -1,6 +1,8 @@
 {
-    "migration_notice": {
-        "title": "【万象画卷】高级配置已迁移。请单机「万象画卷」插件卡片，前往 settings 页面进行可视化配置。",
-        "type": "info"
+    "migration_hint": {
+        "title": "配置说明",
+        "description": "【万象画卷】高级配置已迁移。请单机「万象画卷」插件卡片，前往 settings 页面进行可视化配置。",
+        "type": "text",
+        "default": "请前往 Pages 页面进行配置"
     }
 }

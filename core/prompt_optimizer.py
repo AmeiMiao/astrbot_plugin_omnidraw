@@ -29,13 +29,12 @@ class PromptOptimizer:
         headers = {"Authorization": f"Bearer {provider.api_keys[0]}", "Content-Type": "application/json"}
 
         # ==========================================
-        # 🚀 核心大招：动态风格插槽系统 (Dynamic Style Engine)
-        # 从配置中安全读取用户的选择，默认兜底为手机日常
+        # 🚀 动态风格插槽系统 (Dynamic Style Engine)
         # ==========================================
         style_choice = getattr(self.config, "optimizer_style", "手机日常原生感")
         custom_prompt = getattr(self.config, "optimizer_custom_prompt", "").strip()
 
-        # 四大黄金预设矩阵
+        # 五大黄金预设矩阵
         STYLE_PRESETS = {
             "手机日常原生感": {
                 "role": "an expert in authentic, amateur smartphone photography",
@@ -43,7 +42,15 @@ class PromptOptimizer:
                 "clothing": "casual everyday clothing, realistic fabric textures, messy or natural drape, no overly styled outfits",
                 "environment": "real-world everyday location, authentic daily life setting, slight background clutter, realistic unarranged environment",
                 "lighting": "natural ambient light, uneven room lighting, authentic everyday atmosphere, NO studio lights, flat natural lighting or direct phone flash",
-                "camera": "Shot on iPhone 15 front camera, 24mm wide angle, deep depth of field (background is clear), everything in focus, candid snap, amateur photography, unedited, raw realistic colors, NO professional color grading, realistic mobile phone photo"
+                "camera": "Shot on iPhone 15 rear camera, 24mm wide angle, deep depth of field (background is clear), everything in focus, candid snap, amateur photography, unedited, raw realistic colors, NO professional color grading, realistic mobile photo"
+            },
+            "自拍专用极致真实": {
+                "role": "an Expert Portrait Photographer and Anatomist specializing in hyper-realistic, authentic mobile selfies",
+                "subject": "exact age, ethnicity, hyper-realistic natural skin texture, visible peach fuzz, flawless natural anatomy, perfectly proportional facial features, very subtle natural skin moisture (NOT oily), stray hairs, authentic candid micro-expression, physically accurate eyes",
+                "clothing": "everyday casual clothing, realistic fabric textures, natural drape obeying gravity, perfectly structured collar and shoulders",
+                "environment": "authentic everyday real-world location, realistic daily life setting, slight background clutter, natural background",
+                "lighting": "natural ambient lighting or everyday room light, physically accurate soft shadows, subtle and realistic catchlight in the eyes, no harsh overexposure, completely natural illumination",
+                "camera": "Shot on iPhone 15 front camera, realistic selfie angle, arm naturally extended (not awkwardly bent), slight natural perspective without severe distortion, deep depth of field (background is clear), unedited, raw realistic colors, amateur snap"
             },
             "电影级光影大片": {
                 "role": "an Elite Cinematographer and Master Prompt Engineer for Midjourney/DALL-E 3",
@@ -71,7 +78,7 @@ class PromptOptimizer:
             }
         }
 
-        # 动态组装：如果选择了自定义模式且填写了内容，则强行覆盖要求
+        # 动态组装
         if style_choice == "自定义模式" and custom_prompt:
             style_data = {
                 "role": f"an AI Prompt Expert specializing in this exact style: {custom_prompt}",
@@ -82,10 +89,8 @@ class PromptOptimizer:
                 "camera": f"[{custom_prompt}] Rendering style, camera specs, or art medium matching the custom style"
             }
         else:
-            # 否则去字典里拿，如果异常则兜底为手机日常
             style_data = STYLE_PRESETS.get(style_choice, STYLE_PRESETS["手机日常原生感"])
 
-        # 将动态数据注入 JSON 骨架插槽
         base_json_struct = f"""{{
   "subject_appearance": "{style_data['subject']}",
   "clothing_and_accessories": "{style_data['clothing']}",

@@ -2,6 +2,8 @@
 AstrBot 万象画卷插件 v3.1 - 数据模型
 """
 import os
+import base64
+import time
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
@@ -27,7 +29,8 @@ class PluginConfig:
     max_batch_count: int      
     persona_name: str
     persona_base_prompt: str
-    persona_ref_image: List[str]   # 🔴 已修正为单数
+    # 🔴 必须是复数，否则主程序 generate_selfie 会报错
+    persona_ref_images: List[str]   
     allowed_users: List[str]
     optimizer_style: str
     optimizer_custom_prompt: str
@@ -41,7 +44,6 @@ class PluginConfig:
             model = p.get("model", "")
             if not model and avail: model = avail[0]
             
-            # 💡 关键：兼容前端发来的 api_keys (可能是字符串也可能是列表)
             keys_raw = p.get("api_keys", "")
             api_keys = [k.strip() for k in str(keys_raw).split("\n") if k.strip()] if isinstance(keys_raw, str) else keys_raw
 
@@ -85,6 +87,49 @@ class PluginConfig:
         router_conf = config_dict.get("router_config", {})
         perm_conf = config_dict.get("permission_config", {})
 
+        # 💡 核心修复：参考图的本地存储与清理机制 (解决只增加不删除的问题)
+        raw_images = persona_conf.get("persona_ref_image", [])
+        if not isinstance(raw_images, list):
+            raw_images = [raw_images] if raw_images else []
+            
+        refs_dir = os.path.join(data_dir, "persona_refs")
+        os.makedirs(refs_dir, exist_ok=True)
+        
+        processed_images = []
+        
+        for idx, img_data in enumerate(raw_images):
+            if not img_data:
+                continue
+            if str(img_data).startswith("data:image"):
+                # 1. 遇到前端传来的新 Base64：解码并落盘
+                try:
+                    header, base64_str = img_data.split(",", 1)
+                    ext = "png"
+                    if "jpeg" in header or "jpg" in header: ext = "jpg"
+                    elif "webp" in header: ext = "webp"
+                    
+                    # 引入时间戳确保文件名唯一
+                    filename = f"ref_{int(time.time()*1000)}_{idx}.{ext}"
+                    filepath = os.path.join(refs_dir, filename)
+                    
+                    with open(filepath, "wb") as f:
+                        f.write(base64.b64decode(base64_str))
+                    processed_images.append(filepath)
+                except Exception as e:
+                    print(f"[OmniDraw] Error decoding base64 image: {e}")
+            else:
+                # 2. 已经是本地路径：代表是之前保存过的，直接保留
+                processed_images.append(str(img_data))
+                
+        # 3. 大扫除机制：遍历文件夹，凡是不在本次需要保留列表里的，一律物理删除
+        for filename in os.listdir(refs_dir):
+            filepath = os.path.join(refs_dir, filename)
+            if filepath not in processed_images and os.path.isfile(filepath):
+                try:
+                    os.remove(filepath)
+                except Exception as e:
+                    print(f"[OmniDraw] 无法删除废弃参考图 {filepath}: {e}")
+
         return cls(
             providers=providers,
             video_providers=video_providers,
@@ -101,7 +146,7 @@ class PluginConfig:
             max_batch_count=int(opt_conf.get("max_batch_count", 0)),
             persona_name=str(persona_conf.get("persona_name", "默认助理")),
             persona_base_prompt=str(persona_conf.get("persona_base_prompt", "")),
-            persona_ref_image=persona_conf.get("persona_ref_image", []), # 🔴 已修正为单数，左右对齐
+            persona_ref_images=processed_images, # ✅ 将处理后干净的路径列表赋给复数变量
             allowed_users=[u.strip() for u in str(perm_conf.get("allowed_users", "")).split(",") if u.strip()],
             optimizer_style=str(opt_conf.get("optimizer_style", "手机日常原生感")),
             optimizer_custom_prompt=str(opt_conf.get("optimizer_custom_prompt", "")),

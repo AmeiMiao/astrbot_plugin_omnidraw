@@ -30,7 +30,8 @@ html, body { height: 100%; margin: 0; padding: 0; background: #F4F5F7; font-fami
 .orb-3 { width: 400px; height: 400px; background: #E0C3FC; top: 40%; left: 40%; animation-delay: -10s; }
 @keyframes float { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(40px, 40px) scale(1.1); } }
 
-.layout-wrapper { display: flex; height: 100vh; max-width: 1440px; margin: 0 auto; }
+/* 💡 将 maxWidth 去除，实现宽度 100vw，侧边栏贴边 */
+.layout-wrapper { display: flex; height: 100vh; width: 100vw; margin: 0; }
 
 /* 🌟 核心：液态侧边栏 */
 .sidebar { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; padding: 40px 24px; z-index: 10; border-right: 1px solid var(--glass-border); }
@@ -95,11 +96,12 @@ textarea.input-glass { resize: vertical; line-height: 1.6; }
 .ios-switch:checked { background: #34C759; border-color: #34C759; }
 .ios-switch:checked::after { transform: translateX(22px); }
 
-/* 芯片选择器 */
+/* 🌟 这是你原本的 selector-chip，我不做任何修改！ */
 .node-selector, .node-selector-video { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; }
 .selector-chip { padding: 8px 16px; background: var(--input-bg); border-radius: 20px; font-size: 13px; font-weight: 600; color: var(--text-muted); cursor: pointer; border: 1px solid rgba(255,255,255,0.3); transition: var(--transition); backdrop-filter: blur(10px); }
 .selector-chip:hover { background: rgba(255,255,255,0.6); }
 .selector-chip.active { background: var(--accent); color: #FFF; border-color: var(--accent); box-shadow: 0 4px 12px rgba(0, 111, 238, 0.3); }
+.empty-hint { font-size: 12px; color: #A1A1AA; font-style: italic; }
 
 /* 多图上传区域 */
 .multi-upload-container { display: flex; flex-wrap: wrap; gap: 15px; align-items: stretch; }
@@ -119,10 +121,19 @@ textarea.input-glass { resize: vertical; line-height: 1.6; }
 
 /* 列表容器 */
 .list-container { display: flex; flex-direction: column; gap: 16px; }
+.list-card { border: 1px solid rgba(255,255,255,0.6); border-radius: var(--radius-md); padding: 24px; background: rgba(255,255,255,0.45); transition: var(--transition); }
+.list-card:hover { background: rgba(255,255,255,0.7); box-shadow: 0 8px 24px rgba(0,0,0,0.05); }
+.list-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 16px; }
+.input-minimal { background: transparent; border: none; font-size: 16px; font-weight: 800; width: 180px; outline: none; border-bottom: 1px solid transparent; transition: var(--transition); color: var(--text-main); }
+.input-minimal:focus { border-bottom-color: var(--accent); }
+
 .list-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: rgba(255,255,255,0.4); border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.5); transition: var(--transition); }
 .list-item:focus-within { background: rgba(255,255,255,0.8); border-color: #FFF; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-.input-minimal { background: transparent; border: none; font-size: 14px; font-weight: 700; width: 100%; outline: none; color: var(--text-main); }
-.input-minimal::placeholder { color: rgba(0,0,0,0.3); }
+.preset-name { width: 140px; background: transparent; font-weight: 700; }
+.preset-prompt { flex: 1; background: transparent; }
+.divider-text { color: #A1A1AA; font-size: 12px; font-weight: 700; }
+.btn-icon { background: transparent; border: none; color: #A1A1AA; font-size: 18px; cursor: pointer; transition: var(--transition); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; outline: none; }
+.btn-icon:hover { color: var(--danger); background: #FEE2E2; }
 
 /* Toast */
 #toast-container { position: fixed; top: 40px; left: 50%; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
@@ -137,3 +148,35 @@ textarea.input-glass { resize: vertical; line-height: 1.6; }
 .node-exit { animation: fadeOutRight 0.3s ease-in forwards; pointer-events: none; }
 @keyframes slideInUp { 0% { opacity: 0; transform: translateY(20px) scale(0.98); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes fadeOutRight { 0% { opacity: 1; transform: translateX(0); } 100% { opacity: 0; transform: translateX(30px); } }
+
+/* 💡 新增：独立的 api-chip 样式，用于算力集群模式选择，互不干扰 */
+.chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.api-chip { padding: 8px 16px; background: rgba(255,255,255,0.5); border-radius: 20px; font-size: 13px; font-weight: 600; color: var(--text-muted); cursor: pointer; border: 1px solid rgba(255,255,255,0.6); transition: var(--transition); backdrop-filter: blur(10px); }
+.api-chip:hover { background: rgba(255,255,255,0.8); color: var(--text-main); }
+.api-chip.active { background: var(--accent); color: #FFF; border-color: var(--accent); box-shadow: 0 4px 12px rgba(0, 111, 238, 0.3); }
+
+/* 追加到文件末尾即可 */
+.chip-del { 
+    margin-left: 6px; 
+    color: inherit; 
+    opacity: 0.5; 
+    padding: 0 4px; 
+    border-radius: 50%; 
+    transition: 0.2s; 
+    display: inline-flex; 
+    align-items: center; 
+    justify-content: center; 
+    font-size: 14px; 
+    font-weight: bold; 
+    line-height: 1; 
+}
+.chip-del:hover { 
+    background: rgba(0,0,0,0.1); 
+    opacity: 1; 
+    color: var(--danger); 
+    transform: scale(1.1); 
+}
+.api-chip.active .chip-del:hover { 
+    background: rgba(255,255,255,0.25); 
+    color: #FFF; 
+}

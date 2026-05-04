@@ -1,6 +1,6 @@
 """
 AstrBot 万象画卷插件 v3.1 - 数据模型
-采用极简安全循环，完美兼容全新的中文 UI 标签与历史遗留英文标签。
+新增：模型池数组机制，支持单节点多模型挂载。
 """
 import os
 from dataclasses import dataclass, field
@@ -33,36 +33,50 @@ class PluginConfig:
     allowed_users: List[str]
     optimizer_style: str
     optimizer_custom_prompt: str
-    verbose_report: bool            # 💡 新增：详细汇报开关
+    verbose_report: bool
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any], data_dir: str) -> "PluginConfig":
         providers = []
         for p in config_dict.get("providers", []):
-            model_raw = str(p.get("模型名称", p.get("model", "")))
-            available_models = [m.strip() for m in model_raw.replace("，", ",").split(",") if m.strip()]
+            # 💡 核心升级：模型池加载与单选默认模型分离
+            available_models = p.get("available_models", [])
+            if not available_models:
+                model_raw = str(p.get("模型名称", p.get("model", "")))
+                available_models = [m.strip() for m in model_raw.replace("，", ",").split(",") if m.strip()]
+            
+            saved_model = str(p.get("model", ""))
+            default_model = saved_model if saved_model in available_models else (available_models[0] if available_models else "")
+
             api_keys = [k.strip() for k in str(p.get("API密钥", p.get("api_keys", ""))).split("\n") if k.strip()]
             providers.append(ProviderConfig(
                 id=str(p.get("节点ID", p.get("id", "node_1"))),
                 api_type=str(p.get("接口模式", p.get("api_type", "openai_image"))),
                 base_url=str(p.get("接口地址 (需含/v1)", p.get("base_url", "https://api.openai.com/v1"))),
                 api_keys=api_keys,
-                model=available_models[0] if available_models else "",
+                model=default_model,
                 timeout=float(p.get("超时时间(秒)", p.get("timeout", 60.0))),
                 available_models=available_models
             ))
             
         video_providers = []
         for p in config_dict.get("video_providers", []):
-            model_raw = str(p.get("模型名称", p.get("model", "")))
-            available_models = [m.strip() for m in model_raw.replace("，", ",").split(",") if m.strip()]
+            # 💡 核心升级：视频节点模型池加载
+            available_models = p.get("available_models", [])
+            if not available_models:
+                model_raw = str(p.get("模型名称", p.get("model", "")))
+                available_models = [m.strip() for m in model_raw.replace("，", ",").split(",") if m.strip()]
+            
+            saved_model = str(p.get("model", ""))
+            default_model = saved_model if saved_model in available_models else (available_models[0] if available_models else "")
+
             api_keys = [k.strip() for k in str(p.get("API密钥", p.get("api_keys", ""))).split("\n") if k.strip()]
             video_providers.append(ProviderConfig(
                 id=str(p.get("节点ID", p.get("id", "video_node_1"))),
                 api_type=str(p.get("接口模式", p.get("api_type", "async_task"))),
                 base_url=str(p.get("接口地址 (需含/v1或/v2)", p.get("接口地址 (需含/v1)", p.get("base_url", "https://api.example.com/v1")))),
                 api_keys=api_keys,
-                model=available_models[0] if available_models else "",
+                model=default_model,
                 timeout=float(p.get("超时时间(秒)", p.get("timeout", 300.0))),
                 available_models=available_models
             ))
@@ -136,7 +150,7 @@ class PluginConfig:
             allowed_users=allowed_users,
             optimizer_style=str(opt_conf.get("optimizer_style", "手机日常原生感")),
             optimizer_custom_prompt=str(opt_conf.get("optimizer_custom_prompt", "")),
-            verbose_report=bool(config_dict.get("verbose_report", False)) # 💡 解析详细汇报开关
+            verbose_report=bool(config_dict.get("verbose_report", False)) 
         )
 
     def get_provider(self, provider_id: str) -> Optional[ProviderConfig]:

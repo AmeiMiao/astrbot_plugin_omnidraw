@@ -33,10 +33,8 @@ function renderSelectors() {
     renderTo('sel-route-video', state.video_providers, 'route_video');
 }
 
-// 💡 核心修改区：渲染多张矩形参考图
 function renderPersonaImages() {
     const container = document.getElementById('persona-upload-container');
-    // 清除旧的预览，只保留加号按钮
     container.querySelectorAll('.image-preview-wrapper').forEach(el => el.remove());
     
     const trigger = document.getElementById('persona-upload-trigger');
@@ -75,15 +73,10 @@ async function init() {
     state.persona_config.persona_name = deepFind(pers, ["persona_name"], "默认助理");
     state.persona_config.persona_base_prompt = deepFind(pers, ["persona_base_prompt"]);
     
-    // 💡 智能兼容：将旧版的单字符串转为新版的数组支持多图
     let rawImage = deepFind(pers, ["persona_ref_image"]);
-    if (typeof rawImage === 'string' && rawImage.trim() !== '') {
-        state.persona_config.persona_ref_image = [rawImage];
-    } else if (Array.isArray(rawImage)) {
-        state.persona_config.persona_ref_image = rawImage;
-    } else {
-        state.persona_config.persona_ref_image = [];
-    }
+    if (typeof rawImage === 'string' && rawImage.trim() !== '') state.persona_config.persona_ref_image = [rawImage];
+    else if (Array.isArray(rawImage)) state.persona_config.persona_ref_image = rawImage;
+    else state.persona_config.persona_ref_image = [];
 
     state.optimizer_config.enable_optimizer = deepFind(opt, ["enable_optimizer"], true);
     state.optimizer_config.optimizer_style = deepFind(opt, ["optimizer_style"], "手机日常原生感");
@@ -112,7 +105,7 @@ async function init() {
     renderProviders();
     renderVideoProviders();
     setupEventDelegation();
-    renderPersonaImages(); // 首次渲染参考图
+    renderPersonaImages();
 }
 
 function bindBasicFields() {
@@ -172,7 +165,7 @@ function renderProviders() {
             </div>
         </div>
     `).join('');
-    document.getElementById("providers-container").innerHTML = html;
+    document.getElementById("providers-container").innerHTML = html || '<div class="empty-tip">暂无图像算力节点</div>';
 }
 
 function renderVideoProviders() {
@@ -192,13 +185,40 @@ function renderVideoProviders() {
             </div>
         </div>
     `).join('');
-    document.getElementById("video-providers-container").innerHTML = html;
+    document.getElementById("video-providers-container").innerHTML = html || '<div class="empty-tip">暂无视频算力节点</div>';
 }
 
 function setupEventDelegation() {
     const fileInput = document.getElementById('hidden-file-input');
     
+    // 💡 封装的生命周期入场动画函数
+    const animateAdd = (containerId) => {
+        setTimeout(() => {
+            const container = document.getElementById(containerId);
+            const el = container.lastElementChild;
+            if(el && !el.classList.contains('empty-tip')) {
+                el.classList.add('node-enter');
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 10);
+    };
+
+    // 💡 封装的生命周期离场动画函数
+    const animateDel = (containerId, stateArray, index, renderFn, callback) => {
+        const container = document.getElementById(containerId);
+        const el = container.children[index];
+        if (el) {
+            el.classList.add('node-exit');
+            setTimeout(() => {
+                stateArray.splice(index, 1);
+                renderFn();
+                if(callback) callback();
+            }, 300); // 严格等待 CSS 动画结束
+        }
+    };
+
     document.body.addEventListener('click', (e) => {
+        // Tab 切换
         const navItem = e.target.closest('.nav-item');
         if (navItem) {
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -208,6 +228,7 @@ function setupEventDelegation() {
             return;
         }
 
+        // 芯片选择联动
         const chip = e.target.closest('.selector-chip');
         if (chip) {
             const inputId = chip.getAttribute('data-input');
@@ -217,38 +238,55 @@ function setupEventDelegation() {
             return;
         }
 
+        // 唤起上传
         if (e.target.closest('#persona-upload-trigger')) {
             fileInput.click();
         }
 
+        // 按钮拦截
         const btn = e.target.closest('button[data-action]');
         if (!btn) return;
         const act = btn.getAttribute('data-action');
         const idx = parseInt(btn.getAttribute('data-index'), 10);
 
         if (act === 'save-config') saveConfig(btn);
-        if (act === 'add-preset') { state.presets.push({name:"", prompt:""}); renderPresets(); }
-        if (act === 'del-preset') { state.presets.splice(idx, 1); renderPresets(); }
-        if (act === 'add-provider') { state.providers.push({id:`node_${state.providers.length+1}`, api_type:"openai_image", base_url:"", model:"", api_keys:"", timeout:60}); renderProviders(); renderSelectors(); }
-        if (act === 'del-provider') { state.providers.splice(idx, 1); renderProviders(); renderSelectors(); }
-        if (act === 'add-video-provider') { state.video_providers.push({id:`v_node_${state.video_providers.length+1}`, api_type:"async_task", base_url:"", model:"", api_keys:"", timeout:300}); renderVideoProviders(); renderSelectors(); }
-        if (act === 'del-video-provider') { state.video_providers.splice(idx, 1); renderVideoProviders(); renderSelectors(); }
         
-        // 删除单张参考图
+        // ✨ 新增配置节点及其优雅动画
+        if (act === 'add-preset') { 
+            state.presets.push({name:"", prompt:""}); 
+            renderPresets(); animateAdd('presets-container'); 
+        }
+        if (act === 'del-preset') { 
+            animateDel('presets-container', state.presets, idx, renderPresets); 
+        }
+        
+        if (act === 'add-provider') { 
+            state.providers.push({id:`node_${state.providers.length+1}`, api_type:"openai_image", base_url:"", model:"", api_keys:"", timeout:60}); 
+            renderProviders(); renderSelectors(); animateAdd('providers-container'); 
+        }
+        if (act === 'del-provider') { 
+            animateDel('providers-container', state.providers, idx, renderProviders, renderSelectors); 
+        }
+        
+        if (act === 'add-video-provider') { 
+            state.video_providers.push({id:`v_node_${state.video_providers.length+1}`, api_type:"async_task", base_url:"", model:"", api_keys:"", timeout:300}); 
+            renderVideoProviders(); renderSelectors(); animateAdd('video-providers-container'); 
+        }
+        if (act === 'del-video-provider') { 
+            animateDel('video-providers-container', state.video_providers, idx, renderVideoProviders, renderSelectors); 
+        }
+        
+        // 参考图单张优雅删除
         if (act === 'del-persona-img') {
-            state.persona_config.persona_ref_image.splice(idx, 1);
-            renderPersonaImages();
+            animateDel('persona-upload-container', state.persona_config.persona_ref_image, idx, renderPersonaImages);
         }
     });
 
-    // 多图文件读取逻辑 (转化Base64)
     fileInput.addEventListener('change', function(e) {
         const files = Array.from(e.target.files);
         if (!files.length) return;
-        
         let loadedCount = 0;
         if (!state.persona_config.persona_ref_image) state.persona_config.persona_ref_image = [];
-        
         files.forEach(file => {
             const reader = new FileReader();
             reader.onload = function(evt) {
@@ -261,7 +299,7 @@ function setupEventDelegation() {
             };
             reader.readAsDataURL(file);
         });
-        fileInput.value = ''; // 重置文件框
+        fileInput.value = '';
     });
 
     document.body.addEventListener('input', (e) => {
@@ -290,9 +328,7 @@ function setupEventDelegation() {
         const input = e.target;
         if (!input.hasAttribute('data-sync')) return;
         const s = input.getAttribute('data-sync');
-        if (s === 'node-id' || s === 'v-id') {
-            renderSelectors();
-        }
+        if (s === 'node-id' || s === 'v-id') renderSelectors();
     });
 }
 

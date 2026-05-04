@@ -143,55 +143,61 @@ function readBasicFields() {
 function renderPresets() {
     const html = state.presets.map((p, i) => `
         <div class="list-item">
-            <input type="text" class="input-glass preset-name" style="width: 140px; border:none; background:transparent;" placeholder="快捷指令名" value="${p.name}" data-sync="preset-name" data-index="${i}">
-            <span style="color:var(--text-muted); font-weight: bold; margin: 0 10px;">→</span>
-            <input type="text" class="input-glass preset-prompt" style="flex:1; border:none; background:transparent;" placeholder="底层的英文描述与参数" value="${p.prompt}" data-sync="preset-prompt" data-index="${i}">
-            <button data-action="del-preset" data-index="${i}" class="btn-glass-secondary" style="border:none; color:var(--text-muted); font-size:16px;">×</button>
+            <input type="text" class="input-modern preset-name" placeholder="指令别称" value="${p.name}" data-sync="preset-name" data-index="${i}">
+            <span class="divider-text">映射为</span>
+            <input type="text" class="input-modern preset-prompt" placeholder="底层的英文描述与参数" value="${p.prompt}" data-sync="preset-prompt" data-index="${i}">
+            <button data-action="del-preset" data-index="${i}" class="btn-icon">×</button>
         </div>
     `).join('');
-    document.getElementById("presets-container").innerHTML = html || '<div style="text-align:center; padding: 30px; color: var(--text-muted);">尚未配置快捷指令</div>';
+    document.getElementById("presets-container").innerHTML = html || '<div class="empty-tip">尚未配置快捷指令</div>';
 }
 
 function renderProviders() {
     const html = state.providers.map((p, i) => `
-        <div class="glass-card" style="padding: 24px; margin-bottom: 16px;">
-            <div class="card-header" style="margin-bottom: 16px; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 12px;">
-                <input type="text" class="input-glass" style="width: 200px; font-weight:bold; font-size: 16px; background: transparent; border:none; border-bottom: 1px solid transparent;" placeholder="输入节点 ID" value="${p.id}" data-sync="prov-id" data-index="${i}">
-                <button data-action="del-provider" data-index="${i}" style="background:transparent; border:none; color:var(--danger); font-weight:bold; cursor:pointer;">移除</button>
+        <div class="list-card">
+            <div class="list-card-header">
+                <div class="node-title">
+                    <span class="node-badge">Image Node ${i+1}</span>
+                    <input type="text" class="input-modern id-input" placeholder="输入节点唯一 ID" value="${p.id}" data-sync="prov-id" data-index="${i}">
+                </div>
+                <button data-action="del-provider" data-index="${i}" class="btn-text">移除节点</button>
             </div>
             <div class="grid-2-col">
-                <div class="form-group"><label>接口模式</label><select class="input-glass" data-sync="prov-api" data-index="${i}"><option value="openai_image" ${p.api_type==='openai_image'?'selected':''}>openai_image</option><option value="openai_chat" ${p.api_type==='openai_chat'?'selected':''}>openai_chat</option></select></div>
-                <div class="form-group"><label>接口地址 (需含/v1)</label><input type="text" class="input-glass" value="${p.base_url}" data-sync="prov-url" data-index="${i}"></div>
-                <div class="form-group"><label>模型名称</label><input type="text" class="input-glass" value="${p.model}" data-sync="prov-model" data-index="${i}"></div>
-                <div class="form-group"><label>请求超时</label><input type="number" class="input-glass" value="${p.timeout}" data-sync="prov-time" data-index="${i}"></div>
-                <div class="form-group full-width"><label>API Keys</label><textarea class="input-glass" rows="1" data-sync="prov-keys" data-index="${i}">${p.api_keys}</textarea></div>
+                <div class="form-group"><label>接口模式</label><select class="input-modern" data-sync="prov-api" data-index="${i}"><option value="openai_image" ${p.api_type==='openai_image'?'selected':''}>openai_image (标准生图)</option><option value="openai_chat" ${p.api_type==='openai_chat'?'selected':''}>openai_chat (对话透传)</option></select></div>
+                <div class="form-group"><label>接口地址 (需含/v1)</label><input type="text" class="input-modern" value="${p.base_url}" data-sync="prov-url" data-index="${i}"></div>
+                <div class="form-group"><label>支持的模型</label><input type="text" class="input-modern" value="${p.model}" data-sync="prov-model" data-index="${i}"></div>
+                <div class="form-group"><label>请求超时 (秒)</label><input type="number" class="input-modern" value="${p.timeout}" data-sync="prov-time" data-index="${i}"></div>
+                <div class="form-group full-width"><label>API Keys (支持多行负载均衡)</label><textarea class="input-modern" rows="2" data-sync="prov-keys" data-index="${i}">${p.api_keys}</textarea></div>
             </div>
         </div>
     `).join('');
-    document.getElementById("providers-container").innerHTML = html;
+    document.getElementById("providers-container").innerHTML = html || '<div class="empty-tip">未配置图像算力节点</div>';
 }
 
 function renderVideoProviders() {
     const html = state.video_providers.map((p, i) => `
-        <div class="glass-card" style="padding: 24px; margin-bottom: 16px;">
-            <div class="card-header" style="margin-bottom: 16px; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 12px;">
-                <input type="text" class="input-glass" style="width: 200px; font-weight:bold; font-size: 16px; background: transparent; border:none; border-bottom: 1px solid transparent;" placeholder="输入视频节点 ID" value="${p.id}" data-sync="vid-id" data-index="${i}">
-                <button data-action="del-video-provider" data-index="${i}" style="background:transparent; border:none; color:var(--danger); font-weight:bold; cursor:pointer;">移除</button>
+        <div class="list-card">
+            <div class="list-card-header">
+                <div class="node-title">
+                    <span class="node-badge video-badge">Video Node ${i+1}</span>
+                    <input type="text" class="input-modern id-input" placeholder="输入视频节点 ID" value="${p.id}" data-sync="vid-id" data-index="${i}">
+                </div>
+                <button data-action="del-video-provider" data-index="${i}" class="btn-text">移除节点</button>
             </div>
             <div class="grid-2-col">
-                <div class="form-group"><label>调用协议</label><select class="input-glass" data-sync="vid-api" data-index="${i}">
-                    <option value="async_task" ${p.api_type.includes('async_task')?'selected':''}>异步轮询 (推荐)</option>
+                <div class="form-group"><label>通信协议</label><select class="input-modern" data-sync="vid-api" data-index="${i}">
+                    <option value="async_task" ${p.api_type.includes('async_task')?'selected':''}>异步排队轮询 (稳定推荐)</option>
                     <option value="openai_sync" ${p.api_type.includes('openai_sync')?'selected':''}>同步阻塞返回</option>
                     <option value="openai_chat" ${p.api_type.includes('openai_chat')?'selected':''}>对话接口伪装</option>
                 </select></div>
-                <div class="form-group"><label>接口地址</label><input type="text" class="input-glass" value="${p.base_url}" data-sync="vid-url" data-index="${i}"></div>
-                <div class="form-group"><label>模型名称</label><input type="text" class="input-glass" value="${p.model}" data-sync="vid-model" data-index="${i}"></div>
-                <div class="form-group"><label>请求超时</label><input type="number" class="input-glass" value="${p.timeout}" data-sync="vid-time" data-index="${i}"></div>
-                <div class="form-group full-width"><label>API Keys</label><textarea class="input-glass" rows="1" data-sync="vid-keys" data-index="${i}">${p.api_keys}</textarea></div>
+                <div class="form-group"><label>接口地址</label><input type="text" class="input-modern" value="${p.base_url}" data-sync="vid-url" data-index="${i}"></div>
+                <div class="form-group"><label>模型名称</label><input type="text" class="input-modern" value="${p.model}" data-sync="vid-model" data-index="${i}"></div>
+                <div class="form-group"><label>请求超时</label><input type="number" class="input-modern" value="${p.timeout}" data-sync="vid-time" data-index="${i}"></div>
+                <div class="form-group full-width"><label>API Keys</label><textarea class="input-modern" rows="2" data-sync="vid-keys" data-index="${i}">${p.api_keys}</textarea></div>
             </div>
         </div>
     `).join('');
-    document.getElementById("video-providers-container").innerHTML = html;
+    document.getElementById("video-providers-container").innerHTML = html || '<div class="empty-tip">未配置视频算力节点</div>';
 }
 
 function setupEventDelegation() {
@@ -201,7 +207,7 @@ function setupEventDelegation() {
         setTimeout(() => {
             const container = document.getElementById(containerId);
             const el = container.lastElementChild;
-            if(el) {
+            if(el && !el.classList.contains('empty-tip')) {
                 el.classList.add('node-enter');
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }

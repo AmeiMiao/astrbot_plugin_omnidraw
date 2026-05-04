@@ -1,3 +1,3 @@
 ## 🚀 更新日志 (Changelog) 
 
-### [2026/4/28] 视频兼容async_task (异步排队轮询/videos/generations) openai_sync (同步阻塞直返) openai_chat (对话伪装视频/chat/completions）
+### [2026/5/4] 更新副脑，新增预设功能，内置多种预设以及支持自定义预设

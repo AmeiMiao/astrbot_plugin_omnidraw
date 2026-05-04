@@ -2,7 +2,7 @@ const bridge = window.AstrBotPluginPage;
 
 let state = {
     permission_config: {}, persona_config: { persona_ref_image: [] }, optimizer_config: {}, router_config: {},
-    presets: [], providers: [], video_providers: []
+    presets: [], providers: [], video_providers: [], verbose_report: false // 💡 新增状态
 };
 
 function showToast(message, type = 'success') {
@@ -25,7 +25,7 @@ function renderSelectors() {
             if(!nodeId) return '';
             const isActive = nodeId === currentVal;
             return `<div class="selector-chip ${isActive ? 'active' : ''}" data-id="${nodeId}" data-input="${inputId}">${nodeId}</div>`;
-        }).join('') || '<span class="empty-hint">请先在「算力集群」中添加节点</span>';
+        }).join('') || '<span class="empty-hint">请先在「算力集群」中配置并填写节点 ID</span>';
     };
     renderTo('sel-route-img', state.providers, 'route_img');
     renderTo('sel-route-selfie', state.providers, 'route_selfie');
@@ -94,6 +94,9 @@ async function init() {
         api_keys: Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || p['API密钥'] || '')
     }));
 
+    // 💡 提取 Verbose 开关状态
+    state.verbose_report = rawConfig.verbose_report || false;
+
     bindBasicFields();
     renderSelectors();
     renderPresets();
@@ -117,6 +120,7 @@ function bindBasicFields() {
     document.getElementById("opt_timeout").value = state.optimizer_config.optimizer_timeout;
     document.getElementById("opt_batch").value = state.optimizer_config.max_batch_count;
     document.getElementById("opt_custom").value = state.optimizer_config.optimizer_custom_prompt;
+    document.getElementById("verbose_report").checked = state.verbose_report; // 💡 绑定 UI
 }
 
 function readBasicFields() {
@@ -133,6 +137,7 @@ function readBasicFields() {
     state.optimizer_config.optimizer_timeout = parseFloat(document.getElementById("opt_timeout").value);
     state.optimizer_config.max_batch_count = parseInt(document.getElementById("opt_batch").value);
     state.optimizer_config.optimizer_custom_prompt = document.getElementById("opt_custom").value;
+    state.verbose_report = document.getElementById("verbose_report").checked; // 💡 读取 UI
 }
 
 function renderPresets() {
@@ -147,7 +152,6 @@ function renderPresets() {
     document.getElementById("presets-container").innerHTML = html || '<div class="empty-tip">尚未配置快捷指令</div>';
 }
 
-// 💡 将生图节点的接口模式下拉框改为按钮
 function renderProviders() {
     const html = state.providers.map((p, i) => `
         <div class="list-card">
@@ -156,11 +160,10 @@ function renderProviders() {
                 <button data-action="del-provider" data-index="${i}" class="btn-text-danger">移除</button>
             </div>
             <div class="grid-2-col">
-                <div class="form-group">
-                    <label>接口模式</label>
+                <div class="form-group"><label>接口模式</label>
                     <div class="chip-group">
-                        <div class="api-chip ${p.api_type==='openai_image'?'active':''}" data-sync="prov-api" data-index="${i}" data-val="openai_image">标准生图</div>
-                        <div class="api-chip ${p.api_type==='openai_chat'?'active':''}" data-sync="prov-api" data-index="${i}" data-val="openai_chat">对话透传</div>
+                        <div class="api-chip ${p.api_type==='openai_image'?'active':''}" data-sync="prov-api" data-index="${i}" data-val="openai_image">openai_image</div>
+                        <div class="api-chip ${p.api_type==='openai_chat'?'active':''}" data-sync="prov-api" data-index="${i}" data-val="openai_chat">openai_chat</div>
                     </div>
                 </div>
                 <div class="form-group"><label>接口地址 (需含/v1)</label><input type="text" class="input-modern" value="${p.base_url}" data-sync="prov-url" data-index="${i}"></div>
@@ -173,7 +176,6 @@ function renderProviders() {
     document.getElementById("providers-container").innerHTML = html;
 }
 
-// 💡 将视频节点的接口模式下拉框改为按钮
 function renderVideoProviders() {
     const html = state.video_providers.map((p, i) => `
         <div class="list-card">
@@ -182,12 +184,11 @@ function renderVideoProviders() {
                 <button data-action="del-video-provider" data-index="${i}" class="btn-text-danger">移除</button>
             </div>
             <div class="grid-2-col">
-                <div class="form-group">
-                    <label>调用协议</label>
+                <div class="form-group"><label>调用协议</label>
                     <div class="chip-group">
-                        <div class="api-chip ${(p.api_type||'').includes('async_task')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="async_task">异步轮询</div>
-                        <div class="api-chip ${(p.api_type||'').includes('openai_sync')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_sync">同步阻塞</div>
-                        <div class="api-chip ${(p.api_type||'').includes('openai_chat')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_chat">对话伪装</div>
+                        <div class="api-chip ${(p.api_type||'').includes('async_task')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="async_task">异步轮询 (推荐)</div>
+                        <div class="api-chip ${(p.api_type||'').includes('openai_sync')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_sync">同步阻塞返回</div>
+                        <div class="api-chip ${(p.api_type||'').includes('openai_chat')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_chat">对话接口伪装</div>
                     </div>
                 </div>
                 <div class="form-group"><label>接口地址</label><input type="text" class="input-modern" value="${p.base_url}" data-sync="vid-url" data-index="${i}"></div>
@@ -246,7 +247,6 @@ function setupEventDelegation() {
             return;
         }
 
-        // 💡 处理 API 模式芯片的选择
         const apiChip = e.target.closest('.api-chip');
         if (apiChip) {
             const sync = apiChip.getAttribute('data-sync');
@@ -359,7 +359,8 @@ async function saveConfig(btn) {
 
     const payload = {
         ...state,
-        presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`)
+        presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`),
+        verbose_report: state.verbose_report // 💡 将详细汇报开关状态发给后端
     };
 
     try {

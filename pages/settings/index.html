@@ -18,7 +18,7 @@
             
             <nav class="nav-menu">
                 <div class="nav-label">GATEWAY</div>
-                <button class="nav-item active" data-target="tab-basic"><span>🛡️</span> 访问权限</button>
+                <button class="nav-item active" data-target="tab-basic"><span>⚙️</span> 全局配置</button>
                 <div class="nav-label">CREATIVE</div>
                 <button class="nav-item" data-target="tab-persona"><span>🎭</span> 人设档案</button>
                 <button class="nav-item" data-target="tab-hub"><span>🔗</span> 生成调度</button>
@@ -36,11 +36,19 @@
 
         <main class="content">
             <div id="tab-basic" class="tab-pane active">
-                <div class="page-header"><h2>安全与权限</h2><p>管控谁可以调用本算力站生成内容。</p></div>
+                <div class="page-header"><h2>全局配置</h2><p>管控系统访问权限与全局调试设定。</p></div>
                 <section class="card">
                     <div class="form-group">
                         <label>许可白名单 (QQ号)</label>
                         <input type="text" id="perm_allowed_users" class="input-modern" placeholder="输入QQ号，逗号分隔。留空则全域开放。" />
+                    </div>
+                    <div class="divider"></div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <label style="margin-bottom: 4px; display: block; color: var(--text-main); font-size: 13px;">详细汇报模式 (Verbose)</label>
+                            <span style="font-size: 11px; color: var(--text-muted);">画图前输出最终提示词、透传参数量和参考图数量，供排查时使用。</span>
+                        </div>
+                        <div class="switch-wrapper"><input type="checkbox" id="verbose_report" class="ios-switch"></div>
                     </div>
                 </section>
             </div>
@@ -54,7 +62,7 @@
                     </section>
                     <section class="card">
                         <div class="form-group">
-                            <label>多模态参考图矩阵 (保留原比例)</label>
+                            <label>多模态参考图矩阵</label>
                             <div class="multi-upload-container" id="persona-upload-container">
                                 <div class="upload-trigger" id="persona-upload-trigger">
                                     <span class="upload-icon">+</span>

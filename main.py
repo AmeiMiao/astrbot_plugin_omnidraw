@@ -1,7 +1,5 @@
 """
 AstrBot 万象画卷插件 v3.1
-功能：支持 Gemini / gptimage2 高阶参数动态透传。
-优化：完美的多模态图片解析，规避所有数组冲突。内置开发者详细汇报模式。包含完整控制指令。
 """
 import os
 import base64
@@ -156,7 +154,6 @@ class OmniDrawPlugin(Star):
         if not allowed: return True
         sender_id = str(event.get_sender_id())
         if sender_id in allowed: return True
-        logger.warning(f"🚫 拦截无权限调用: {sender_id}")
         return False
 
     def _create_image_component(self, image_url: str) -> Image:
@@ -182,9 +179,6 @@ class OmniDrawPlugin(Star):
                 if prov: return prov
             return self.plugin_config.providers[0] if self.plugin_config.providers else None
 
-    # ==========================================
-    # 🌟 指令恢复区 
-    # ==========================================
     @filter.command("万象帮助")
     @handle_errors
     async def cmd_help(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
@@ -233,7 +227,7 @@ class OmniDrawPlugin(Star):
             
         models = prov.available_models
         if not models:
-            yield event.plain_result(f"{MessageEmoji.WARNING} 当前节点 ({prov.id}) 未配置可选模型列表 (以逗号分隔)")
+            yield event.plain_result(f"{MessageEmoji.WARNING} 当前节点 ({prov.id}) 未配置可选模型")
             return
             
         if not model_idx:
@@ -241,7 +235,7 @@ class OmniDrawPlugin(Star):
             for i, m in enumerate(models):
                 marker = "👉" if m == prov.model else "  "
                 msg += f"{marker} [{i}] {m}\n"
-            msg += "\n请使用 /切换模型 [目标] [序号] 来选择"
+            msg += "\n回复 /切换模型 [目标] [序号] 进行选择"
             yield event.plain_result(msg)
             return
             
@@ -260,16 +254,12 @@ class OmniDrawPlugin(Star):
             p_id = p_dict.get("id") or p_dict.get("节点ID")
             if p_id == prov.id:
                 p_dict["model"] = selected_model
-                p_dict["模型名称"] = selected_model
                 break
                 
         if hasattr(self.context, 'update_config'):
             self.context.update_config(self.raw_config)
-        yield event.plain_result(f"{MessageEmoji.SUCCESS} 已将 {target} 节点 ({prov.id}) 的模型切换为: {selected_model}")
+        yield event.plain_result(f"{MessageEmoji.SUCCESS} 已将 {target} 节点 ({prov.id}) 默认模型切换为: {selected_model}")
 
-    # ==========================================
-    # 🎨 生成指令区 
-    # ==========================================
     @filter.event_message_type(EventMessageType.ALL)
     async def on_message_preset(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
         if not self.plugin_config.presets: return
@@ -282,10 +272,6 @@ class OmniDrawPlugin(Star):
         if not self._has_permission(event): return
 
         raw_refs = self._get_event_images(event)
-        if not raw_refs:
-            yield event.plain_result(f"{MessageEmoji.WARNING} 魔法失效！请发一张图片，或者「引用」图片重试哦~")
-            return
-
         preset_prompt = self.plugin_config.presets[cmd_name]
         safe_refs = await self._process_and_save_images(raw_refs)
         
@@ -376,25 +362,13 @@ class OmniDrawPlugin(Star):
         
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
-    # ==========================================
-    # 🤖 LLM 工具区 
-    # ==========================================
     @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str, count: int = 1, aspect_ratio: str = "", size: str = "") -> str:
-        """
-        以此 AI 助理（我）的固定人设拍摄自拍。
-        Args:
-            action (string): 动作和场景描述。
-            count (int): 需要生成的图片数量。默认为1。
-            aspect_ratio (string): 宽高比例。
-            size (string): 分辨率。
-        """
-        if not self._has_permission(event): return "系统提示：无权限调用。"
+        """以此 AI 助理的固定人设拍摄自拍。"""
+        if not self._has_permission(event): return "无权限调用。"
         try:
             count = min(max(1, self._normalize_count(count)), self.plugin_config.max_batch_count or 10)
-            logger.info(f"📸 [LLM] 发起 {count} 张自拍。")
             optimized_actions = await self.prompt_optimizer.optimize(action, count)
-            
             persona_ref = self.plugin_config.persona_ref_images
             raw_refs = self._get_event_images(event)
             target_refs = raw_refs if raw_refs else persona_ref
@@ -421,21 +395,13 @@ class OmniDrawPlugin(Star):
             for url in valid_urls:
                 await event.send(event.chain_result([self._create_image_component(url)]))
                 await asyncio.sleep(0.5) 
-            return f"系统提示：已成功生成并下发了 {len(valid_urls)} 张图。请自然回复用户。"
+            return f"系统提示：已成功生成并下发了 {len(valid_urls)} 张图。"
         except Exception as e:
             return f"系统提示：画图失败 ({str(e)})。"
 
     @llm_tool(name="generate_image")
     async def tool_generate_image(self, event: AstrMessageEvent, prompt: str, count: int = 1, aspect_ratio: str = "", size: str = "", extra_params: str = "") -> str:
-        """
-        AI 画图工具。当用户提出明确的画面要求你画出来时调用此工具。
-        Args:
-            prompt (string): 提示词。
-            count (int): 图片数量。默认为1。
-            aspect_ratio (string): 宽高比例。
-            size (string): 分辨率。
-            extra_params (string): 其他参数。
-        """
+        """AI 画图工具。当用户提出明确的画面要求你画出来时调用此工具。"""
         if not self._has_permission(event): return "无权限调用。"
         try:
             count = min(max(1, self._normalize_count(count)), self.plugin_config.max_batch_count or 10)
@@ -459,19 +425,14 @@ class OmniDrawPlugin(Star):
             for url in valid_urls:
                 await event.send(event.chain_result([self._create_image_component(url)]))
                 await asyncio.sleep(0.5) 
-            return f"系统提示：已成功下发 {len(valid_urls)} 张图。请自然回复。"
+            return f"系统提示：已成功下发 {len(valid_urls)} 张图。"
         except Exception as e:
             return f"系统提示：画图失败 ({str(e)})。"
 
     @llm_tool(name="generate_video")
     async def tool_generate_video(self, event: AstrMessageEvent, prompt: str, count: int = 1) -> str:
-        """
-        AI 视频生成工具。当用户要求生成一段视频(mp4)时调用。
-        Args:
-            prompt (string): 视频提示词。
-            count (int): 视频数量，默认为 1。
-        """
-        if not self._has_permission(event): return "系统提示：无权限调用。"
+        """AI 视频生成工具。当用户要求生成一段视频时调用。"""
+        if not self._has_permission(event): return "无权限调用。"
         try:
             count = min(max(1, self._normalize_count(count)), self.plugin_config.max_batch_count or 10)
             safe_refs = await self._process_and_save_images(self._get_event_images(event))

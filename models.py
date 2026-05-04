@@ -1,6 +1,5 @@
 """
 AstrBot 万象画卷插件 v3.1 - 数据模型
-新增：模型池数组机制，支持单节点多模型挂载。
 """
 import os
 from dataclasses import dataclass, field
@@ -28,7 +27,6 @@ class PluginConfig:
     max_batch_count: int      
     persona_name: str
     persona_base_prompt: str
-    persona_ref_image: str          
     persona_ref_images: List[str]   
     allowed_users: List[str]
     optimizer_style: str
@@ -39,105 +37,63 @@ class PluginConfig:
     def from_dict(cls, config_dict: Dict[str, Any], data_dir: str) -> "PluginConfig":
         providers = []
         for p in config_dict.get("providers", []):
-            # 💡 核心升级：模型池加载与单选默认模型分离
-            available_models = p.get("available_models", [])
-            if not available_models:
-                model_raw = str(p.get("模型名称", p.get("model", "")))
-                available_models = [m.strip() for m in model_raw.replace("，", ",").split(",") if m.strip()]
+            avail = p.get("available_models", [])
+            model = p.get("model", "")
+            if not model and avail: model = avail[0]
             
-            saved_model = str(p.get("model", ""))
-            default_model = saved_model if saved_model in available_models else (available_models[0] if available_models else "")
+            # 💡 关键：兼容前端发来的 api_keys (可能是字符串也可能是列表)
+            keys_raw = p.get("api_keys", "")
+            api_keys = [k.strip() for k in str(keys_raw).split("\n") if k.strip()] if isinstance(keys_raw, str) else keys_raw
 
-            api_keys = [k.strip() for k in str(p.get("API密钥", p.get("api_keys", ""))).split("\n") if k.strip()]
             providers.append(ProviderConfig(
-                id=str(p.get("节点ID", p.get("id", "node_1"))),
-                api_type=str(p.get("接口模式", p.get("api_type", "openai_image"))),
-                base_url=str(p.get("接口地址 (需含/v1)", p.get("base_url", "https://api.openai.com/v1"))),
+                id=str(p.get("id", "node_1")),
+                api_type=str(p.get("api_type", "openai_image")),
+                base_url=str(p.get("base_url", "")),
                 api_keys=api_keys,
-                model=default_model,
-                timeout=float(p.get("超时时间(秒)", p.get("timeout", 60.0))),
-                available_models=available_models
+                model=model,
+                timeout=float(p.get("timeout", 60.0)),
+                available_models=avail
             ))
             
         video_providers = []
         for p in config_dict.get("video_providers", []):
-            # 💡 核心升级：视频节点模型池加载
-            available_models = p.get("available_models", [])
-            if not available_models:
-                model_raw = str(p.get("模型名称", p.get("model", "")))
-                available_models = [m.strip() for m in model_raw.replace("，", ",").split(",") if m.strip()]
+            avail = p.get("available_models", [])
+            model = p.get("model", "")
+            if not model and avail: model = avail[0]
             
-            saved_model = str(p.get("model", ""))
-            default_model = saved_model if saved_model in available_models else (available_models[0] if available_models else "")
+            keys_raw = p.get("api_keys", "")
+            api_keys = [k.strip() for k in str(keys_raw).split("\n") if k.strip()] if isinstance(keys_raw, str) else keys_raw
 
-            api_keys = [k.strip() for k in str(p.get("API密钥", p.get("api_keys", ""))).split("\n") if k.strip()]
             video_providers.append(ProviderConfig(
-                id=str(p.get("节点ID", p.get("id", "video_node_1"))),
-                api_type=str(p.get("接口模式", p.get("api_type", "async_task"))),
-                base_url=str(p.get("接口地址 (需含/v1或/v2)", p.get("接口地址 (需含/v1)", p.get("base_url", "https://api.example.com/v1")))),
+                id=str(p.get("id", "video_node_1")),
+                api_type=str(p.get("api_type", "async_task")),
+                base_url=str(p.get("base_url", "")),
                 api_keys=api_keys,
-                model=default_model,
-                timeout=float(p.get("超时时间(秒)", p.get("timeout", 300.0))),
-                available_models=available_models
+                model=model,
+                timeout=float(p.get("timeout", 300.0)),
+                available_models=avail
             ))
 
         presets_dict = {}
         for p in config_dict.get("presets", []):
-            if isinstance(p, str):
-                separator = "：" if "：" in p else ":"
-                if separator in p:
-                    parts = p.split(separator, 1)
-                    if len(parts) == 2:
-                        cmd, prompt = parts[0].strip(), parts[1].strip()
-                        if cmd and prompt:
-                            if cmd.startswith("/"): cmd = cmd[1:]
-                            presets_dict[cmd] = prompt
+            if isinstance(p, str) and ":" in p:
+                parts = p.split(":", 1)
+                presets_dict[parts[0].strip()] = parts[1].strip()
 
         persona_conf = config_dict.get("persona_config", {})
         opt_conf = config_dict.get("optimizer_config", {})
         router_conf = config_dict.get("router_config", {})
         perm_conf = config_dict.get("permission_config", {})
 
-        raw_images = persona_conf.get("persona_ref_image", [])
-        if isinstance(raw_images, str):
-            raw_images = [raw_images] if raw_images.strip() else []
-        elif not isinstance(raw_images, list):
-            raw_images = []
-
-        processed_ref_paths = []
-        for img_path in raw_images:
-            if isinstance(img_path, dict):
-                img_path = img_path.get("path") or img_path.get("url") or img_path.get("file") or ""
-            if not isinstance(img_path, str) or not img_path.strip():
-                continue
-                
-            img_path = img_path.strip()
-            if img_path.startswith("data:image") or img_path.startswith("http") or os.path.isabs(img_path):
-                processed_ref_paths.append(img_path)
-            else:
-                target_path = os.path.abspath(os.path.join(data_dir, img_path))
-                if os.path.exists(target_path):
-                    processed_ref_paths.append(target_path)
-                else:
-                    processed_ref_paths.append(os.path.abspath(os.path.join(data_dir, img_path)))
-
-        chains = {"text2img": [], "selfie": [], "video": [], "optimizer": []}
-        for item in str(router_conf.get("chain_text2img", "node_1")).split(","):
-            if item.strip(): chains["text2img"].append(item.strip())
-        for item in str(router_conf.get("chain_selfie", "node_1")).split(","):
-            if item.strip(): chains["selfie"].append(item.strip())
-        for item in str(router_conf.get("chain_video", "video_node_1")).split(","):
-            if item.strip(): chains["video"].append(item.strip())
-        for item in str(opt_conf.get("chain_optimizer", "node_1")).split(","):
-            if item.strip(): chains["optimizer"].append(item.strip())
-
-        raw_users = perm_conf.get("allowed_users", "")
-        allowed_users = [u.strip() for u in str(raw_users).replace("，", ",").split(",") if u.strip()]
-
         return cls(
             providers=providers,
             video_providers=video_providers,
-            chains=chains,
+            chains={
+                "text2img": [router_conf.get("chain_text2img", "node_1")],
+                "selfie": [router_conf.get("chain_selfie", "node_1")],
+                "video": [router_conf.get("chain_video", "video_node_1")],
+                "optimizer": [opt_conf.get("chain_optimizer", "node_1")]
+            },
             presets=presets_dict,
             enable_optimizer=bool(opt_conf.get("enable_optimizer", True)),
             optimizer_model=str(opt_conf.get("optimizer_model", "gpt-4o-mini")),
@@ -145,12 +101,11 @@ class PluginConfig:
             max_batch_count=int(opt_conf.get("max_batch_count", 0)),
             persona_name=str(persona_conf.get("persona_name", "默认助理")),
             persona_base_prompt=str(persona_conf.get("persona_base_prompt", "")),
-            persona_ref_image=processed_ref_paths[0] if processed_ref_paths else "", 
-            persona_ref_images=processed_ref_paths, 
-            allowed_users=allowed_users,
+            persona_ref_images=persona_conf.get("persona_ref_image", []), 
+            allowed_users=[u.strip() for u in str(perm_conf.get("allowed_users", "")).split(",") if u.strip()],
             optimizer_style=str(opt_conf.get("optimizer_style", "手机日常原生感")),
             optimizer_custom_prompt=str(opt_conf.get("optimizer_custom_prompt", "")),
-            verbose_report=bool(config_dict.get("verbose_report", False)) 
+            verbose_report=bool(config_dict.get("verbose_report", False))
         )
 
     def get_provider(self, provider_id: str) -> Optional[ProviderConfig]:

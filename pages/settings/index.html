@@ -8,68 +8,64 @@
 <body>
     <div class="layout-wrapper">
         <aside class="sidebar">
-            <div class="brand">
+            <div class="brand fade-in-up" style="animation-delay: 0.1s;">
                 <span class="icon">🎨</span>
                 <h1>万象画卷</h1>
                 <span class="version">v3.1 Pro</span>
             </div>
-            <p class="subtitle">现代化 AI 绘画与视频生成调度中枢</p>
-            <div class="save-panel">
-                <button id="save-btn" class="btn-primary">💾 保存所有配置</button>
-                <div id="status-msg" class="status-empty"></div>
+            <p class="subtitle fade-in-up" style="animation-delay: 0.2s;">现代化 AI 绘画调度中枢</p>
+            <div class="save-panel fade-in-up" style="animation-delay: 0.3s;">
+                <button data-action="save-config" class="btn-primary ripple">
+                    <span class="btn-text">💾 保存并热重载</span>
+                </button>
             </div>
         </aside>
 
         <main class="content">
-            
             <div class="grid-row">
-                <section class="card">
-                    <div class="card-header">
-                        <h2>🛡️ 基础与路由设置</h2>
-                    </div>
+                <section class="card fade-in-up" style="animation-delay: 0.1s;">
+                    <div class="card-header"><h2>🛡️ 基础与路由设置</h2></div>
                     <div class="card-body">
                         <div class="form-group">
-                            <label>允许使用的QQ号 (逗号分隔，留空则全员可用)</label>
-                            <input type="text" id="perm_allowed_users" placeholder="例如: 12345678,87654321" />
+                            <label>允许使用的QQ号 (逗号分隔，留空全员可用)</label>
+                            <input type="text" id="perm_allowed_users" class="input-trans" placeholder="例如: 12345678,87654321" />
                         </div>
                         <div class="divider"></div>
                         <div class="form-group">
                             <label>🔗 画图指令绑定节点 (chain_text2img)</label>
-                            <input type="text" id="route_img" placeholder="例如: node_1" />
+                            <input type="text" id="route_img" class="input-trans" placeholder="例如: node_1" />
                         </div>
                         <div class="form-group">
                             <label>🔗 自拍指令绑定节点 (chain_selfie)</label>
-                            <input type="text" id="route_selfie" placeholder="例如: node_1" />
+                            <input type="text" id="route_selfie" class="input-trans" placeholder="例如: node_1" />
                         </div>
                         <div class="form-group">
                             <label>🔗 视频指令绑定节点 (chain_video)</label>
-                            <input type="text" id="route_video" placeholder="例如: video_node_1" />
+                            <input type="text" id="route_video" class="input-trans" placeholder="例如: video_node_1" />
                         </div>
                     </div>
                 </section>
 
-                <section class="card">
-                    <div class="card-header">
-                        <h2>🎭 固定人设定制</h2>
-                    </div>
+                <section class="card fade-in-up" style="animation-delay: 0.2s;">
+                    <div class="card-header"><h2>🎭 固定人设定制</h2></div>
                     <div class="card-body">
                         <div class="form-group">
                             <label>助理名称</label>
-                            <input type="text" id="persona_name" placeholder="例如: 默认助理" />
+                            <input type="text" id="persona_name" class="input-trans" placeholder="例如: 默认助理" />
                         </div>
                         <div class="form-group">
                             <label>外貌特征提示词 (Base Prompt)</label>
-                            <textarea id="persona_prompt" rows="3" placeholder="例如: masterpiece, best quality, 1girl..."></textarea>
+                            <textarea id="persona_prompt" rows="3" class="input-trans" placeholder="例如: masterpiece, best quality..."></textarea>
                         </div>
                         <div class="form-group">
                             <label>形象参考图 (绝对路径 或 网络URL)</label>
-                            <input type="text" id="persona_ref" placeholder="例如: https://... 或 C:/images/ref.jpg" />
+                            <input type="text" id="persona_ref" class="input-trans" placeholder="例如: https://... 或 C:/images/ref.jpg" />
                         </div>
                     </div>
                 </section>
             </div>
 
-            <section class="card highlight-card">
+            <section class="card highlight-card fade-in-up" style="animation-delay: 0.3s;">
                 <div class="card-header">
                     <h2>🧠 提示词副脑引擎 (Prompt Optimizer)</h2>
                     <label class="toggle-switch">
@@ -80,7 +76,7 @@
                 <div class="card-body grid-2-col">
                     <div class="form-group">
                         <label>✨ 副脑预设画风</label>
-                        <select id="opt_style">
+                        <select id="opt_style" class="input-trans">
                             <option value="手机日常原生感">手机日常原生感</option>
                             <option value="自拍专用极致真实">自拍专用极致真实</option>
                             <option value="电影级光影大片">电影级光影大片</option>
@@ -91,56 +87,54 @@
                     </div>
                     <div class="form-group">
                         <label>执行链路 (节点ID)</label>
-                        <input type="text" id="opt_chain" placeholder="例如: node_1" />
+                        <input type="text" id="opt_chain" class="input-trans" />
                     </div>
                     <div class="form-group">
-                        <label>优化模型 (推荐 gpt-4o-mini)</label>
-                        <input type="text" id="opt_model" />
+                        <label>优化模型</label>
+                        <input type="text" id="opt_model" class="input-trans" />
                     </div>
                     <div class="form-group">
                         <label>超时时间 (秒)</label>
-                        <input type="number" id="opt_timeout" />
+                        <input type="number" id="opt_timeout" class="input-trans" />
                     </div>
                     <div class="form-group">
                         <label>单次批量上限 (0为不限)</label>
-                        <input type="number" id="opt_batch" />
+                        <input type="number" id="opt_batch" class="input-trans" />
                     </div>
                     <div class="form-group full-width">
                         <label>✍️ 自定义注入词 (仅选择【自定义模式】时生效)</label>
-                        <textarea id="opt_custom" rows="2" placeholder="用大白话输入你期望的光影、画风或镜头要求..."></textarea>
+                        <textarea id="opt_custom" rows="2" class="input-trans" placeholder="大白话输入要求..."></textarea>
                     </div>
                 </div>
             </section>
 
-            <section class="card">
+            <section class="card fade-in-up" style="animation-delay: 0.4s;">
                 <div class="card-header space-between">
                     <h2>✨ 极速改图预设</h2>
-                    <button class="btn-success btn-small" onclick="window.addPreset()">+ 添加预设</button>
+                    <button data-action="add-preset" class="btn-success btn-small ripple">+ 添加预设</button>
                 </div>
-                <div class="card-body" id="presets-container">
-                    </div>
+                <div class="card-body list-container" id="presets-container"></div>
             </section>
 
-            <section class="card">
+            <section class="card fade-in-up" style="animation-delay: 0.5s;">
                 <div class="card-header space-between">
                     <h2>🎨 生图 API 节点</h2>
-                    <button class="btn-success btn-small" onclick="window.addProvider()">+ 添加生图节点</button>
+                    <button data-action="add-provider" class="btn-success btn-small ripple">+ 添加生图节点</button>
                 </div>
-                <div class="card-body list-container" id="providers-container">
-                    </div>
+                <div class="card-body list-container" id="providers-container"></div>
             </section>
 
-            <section class="card">
+            <section class="card fade-in-up" style="animation-delay: 0.6s;">
                 <div class="card-header space-between">
                     <h2>🎬 视频 API 节点</h2>
-                    <button class="btn-success btn-small" onclick="window.addVideoProvider()">+ 添加视频节点</button>
+                    <button data-action="add-video-provider" class="btn-success btn-small ripple">+ 添加视频节点</button>
                 </div>
-                <div class="card-body list-container" id="video-providers-container">
-                    </div>
+                <div class="card-body list-container" id="video-providers-container"></div>
             </section>
-
         </main>
     </div>
+
+    <div id="toast-container"></div>
 
     <script type="module" src="./app.js"></script>
 </body>

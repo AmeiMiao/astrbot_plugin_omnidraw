@@ -3,7 +3,7 @@ const bridge = window.AstrBotPluginPage;
 let state = {
     permission_config: { allowed_users: "" },
     persona_config: { persona_name: "", persona_base_prompt: "", persona_ref_image: [] },
-    optimizer_config: { enable_optimizer: true, optimizer_style: "", chain_optimizer: "", optimizer_model: "", optimizer_timeout: 15, max_batch_count: 0, optimizer_custom_prompt: "" },
+    optimizer_config: { enable_optimizer: true, optimizer_style: "手机日常原生感", chain_optimizer: "node_1", optimizer_model: "gpt-4o-mini", optimizer_timeout: 15, max_batch_count: 0, optimizer_custom_prompt: "" },
     router_config: { chain_text2img: "node_1", chain_selfie: "node_1", chain_video: "video_node_1" },
     presets: [], providers: [], video_providers: [], verbose_report: false
 };
@@ -24,7 +24,7 @@ function renderSelectors() {
         if (!container || !hiddenInput) return;
         const currentVal = hiddenInput.value;
         container.innerHTML = sourceList.map(node => {
-            const nodeId = node.id || node['节点ID'];
+            const nodeId = node.id;
             if(!nodeId) return '';
             return `<div class="selector-chip ${nodeId === currentVal ? 'active' : ''}" data-id="${nodeId}" data-input="${inputId}">${nodeId}</div>`;
         }).join('') || '<span class="empty-hint">请先在「算力集群」中配置并填写节点 ID</span>';
@@ -49,6 +49,7 @@ function renderPersonaImages() {
     });
 }
 
+// 💡 重点：确保 render 函数里的 data-sync 与下面的监听器严格一致
 function renderProviders() {
     const container = document.getElementById("providers-container");
     if(!container) return;
@@ -143,7 +144,6 @@ async function init() {
     const context = await bridge.ready();
     const raw = await bridge.apiGet("get_config") || {};
     
-    // 恢复 state 数据
     const perm = raw.permission_config || {};
     const pers = raw.persona_config || {};
     const opt = raw.optimizer_config || {};
@@ -179,7 +179,7 @@ async function init() {
     }));
     state.verbose_report = raw.verbose_report || false;
 
-    // 💡 同步到 UI (增加 Null 保护)
+    // 回显数据
     const elId = (id) => document.getElementById(id);
     if(elId("perm_allowed_users")) elId("perm_allowed_users").value = state.permission_config.allowed_users;
     if(elId("persona_name")) elId("persona_name").value = state.persona_config.persona_name;
@@ -271,7 +271,7 @@ function setupEventDelegation() {
             }
             if (act === 'del-prov-model') { e.stopPropagation(); const midx = parseInt(btn.dataset.midx, 10); state.providers[idx].available_models.splice(midx, 1); renderProviders(); }
             if (act === 'del-vid-model') { e.stopPropagation(); const midx = parseInt(btn.dataset.midx, 10); state.video_providers[idx].available_models.splice(midx, 1); renderVideoProviders(); }
-        } catch(err) { console.error("Event Delegation Error:", err); }
+        } catch(err) { console.error(err); }
     });
 
     if(fileInput) {
@@ -285,6 +285,7 @@ function setupEventDelegation() {
         });
     }
 
+    // 💡 修复重点：监听 data-sync 实时更新内存 state，确保保存时节点 ID/URL 不丢失
     document.body.addEventListener('input', (e) => {
         const input = e.target;
         const s = input.dataset.sync;
@@ -293,11 +294,11 @@ function setupEventDelegation() {
         const v = input.value;
         if (s === 'preset-name') state.presets[i].name = v;
         if (s === 'preset-prompt') state.presets[i].prompt = v;
-        if (s === 'prov-id') state.providers[i].id = v;
+        if (s === 'prov-id') { state.providers[i].id = v; renderSelectors(); } // 节点 ID 变化实时更新调度选择器
         if (s === 'prov-url') state.providers[i].base_url = v;
         if (s === 'prov-time') state.providers[i].timeout = v;
         if (s === 'prov-keys') state.providers[i].api_keys = v;
-        if (s === 'vid-id') state.video_providers[i].id = v;
+        if (s === 'vid-id') { state.video_providers[i].id = v; renderSelectors(); }
         if (s === 'vid-url') state.video_providers[i].base_url = v;
         if (s === 'vid-time') state.video_providers[i].timeout = v;
         if (s === 'vid-keys') state.video_providers[i].api_keys = v;
@@ -310,7 +311,6 @@ async function saveConfig(btn) {
     btn.innerText = "部署中...";
     
     try {
-        // 读取所有当前 UI 字段
         const elVal = (id) => document.getElementById(id) ? document.getElementById(id).value : "";
         const elCheck = (id) => document.getElementById(id) ? document.getElementById(id).checked : false;
 
@@ -326,25 +326,20 @@ async function saveConfig(btn) {
         state.optimizer_config.optimizer_custom_prompt = elVal("opt_custom");
         state.verbose_report = elCheck("verbose_report");
 
+        // 整理调度指向
+        state.router_config.chain_text2img = elVal("route_img");
+        state.router_config.chain_selfie = elVal("route_selfie");
+        state.router_config.chain_video = elVal("route_video");
+
         const payload = {
-            permission_config: state.permission_config,
-            persona_config: state.persona_config,
-            optimizer_config: state.optimizer_config,
-            router_config: {
-                chain_text2img: elVal("route_img"),
-                chain_selfie: elVal("route_selfie"),
-                chain_video: elVal("route_video")
-            },
-            presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`),
-            providers: state.providers,
-            video_providers: state.video_providers,
-            verbose_report: state.verbose_report
+            ...state,
+            presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`)
         };
 
         const res = await bridge.apiPost("save_config", payload);
         if (res.success) showToast("部署成功！");
         else showToast("保存失败", "error");
-    } catch(e) { console.error(e); showToast("脚本错误", "error"); }
+    } catch(e) { showToast("脚本错误", "error"); }
     btn.disabled = false;
     btn.innerText = oldText;
 }

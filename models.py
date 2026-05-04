@@ -30,7 +30,7 @@ class PluginConfig:
     persona_base_prompt: str
     persona_ref_image: str
     allowed_users: List[str]
-    # 👇 新增下面两行 👇
+    # 👇 新增的副脑风格配置
     optimizer_style: str
     optimizer_custom_prompt: str
 
@@ -75,7 +75,6 @@ class PluginConfig:
             video_providers.append(ProviderConfig(
                 id=str(p.get("节点ID", p.get("id", "video_node_1"))),
                 api_type=str(p.get("接口模式", p.get("api_type", "async_task"))),
-                # 🚀 级联匹配：新中文名 -> 老中文名 -> 英文原名
                 base_url=str(p.get("接口地址 (需含/v1或/v2)", p.get("接口地址 (需含/v1)", p.get("base_url", "https://api.example.com/v1")))),
                 api_keys=api_keys,
                 model=available_models[0] if available_models else "",
@@ -148,8 +147,8 @@ class PluginConfig:
             persona_name=str(persona_conf.get("persona_name", "默认助理")),
             persona_base_prompt=str(persona_conf.get("persona_base_prompt", "")),
             persona_ref_image=ref_path,
-            allowed_users=allowed_users
-            # 👇 新增下面两行 👇
+            # 👇 这里的逗号之前漏掉了，现在加上了
+            allowed_users=allowed_users,
             optimizer_style=str(opt_conf.get("optimizer_style", "手机日常原生感")),
             optimizer_custom_prompt=str(opt_conf.get("optimizer_custom_prompt", ""))
         )

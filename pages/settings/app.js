@@ -143,7 +143,7 @@ async function init() {
     const context = await bridge.ready();
     const raw = await bridge.apiGet("get_config") || {};
     
-    // 合并配置数据
+    // 数据回载逻辑
     const perm = raw.permission_config || {};
     const pers = raw.persona_config || {};
     const opt = raw.optimizer_config || {};
@@ -168,18 +168,18 @@ async function init() {
 
     state.presets = (raw.presets || []).map(p => typeof p === 'string' ? { name: p.split(':')[0], prompt: p.split(':')[1] } : p);
     state.providers = (raw.providers || []).map(p => ({
-        id: p.id || p['节点ID'] || '', api_type: p.api_type || 'openai_image',
+        id: p.id || '', api_type: p.api_type || 'openai_image',
         base_url: p.base_url || '', model: p.model || '', available_models: p.available_models || [],
         timeout: p.timeout || 60, api_keys: Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || '')
     }));
     state.video_providers = (raw.video_providers || []).map(p => ({
-        id: p.id || p['节点ID'] || '', api_type: p.api_type || 'async_task',
+        id: p.id || '', api_type: p.api_type || 'async_task',
         base_url: p.base_url || '', model: p.model || '', available_models: p.available_models || [],
         timeout: p.timeout || 300, api_keys: Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || '')
     }));
     state.verbose_report = raw.verbose_report || false;
 
-    // 绑定基础字段
+    // 绑定基础字段到 UI
     document.getElementById("perm_allowed_users").value = state.permission_config.allowed_users;
     document.getElementById("persona_name").value = state.persona_config.persona_name;
     document.getElementById("persona_prompt").value = state.persona_config.persona_base_prompt;
@@ -218,7 +218,7 @@ function setupEventDelegation() {
 
         const chip = e.target.closest('.selector-chip');
         if (chip) {
-            const inputId = chip.dataset.id ? chip.dataset.input : null;
+            const inputId = chip.dataset.input;
             if (inputId) {
                 document.getElementById(inputId).value = chip.dataset.id;
                 document.querySelectorAll(`.selector-chip[data-input="${inputId}"]`).forEach(c => c.classList.remove('active'));
@@ -286,6 +286,7 @@ function setupEventDelegation() {
         fileInput.value = '';
     });
 
+    // 💡 同步 input 标识符
     document.body.addEventListener('input', (e) => {
         const input = e.target;
         const s = input.dataset.sync;
@@ -310,7 +311,7 @@ async function saveConfig(btn) {
     const oldText = btn.innerText;
     btn.innerText = "部署中...";
     
-    // 读取基础数据
+    // 强制刷新 state 中的基础配置
     state.permission_config.allowed_users = document.getElementById("perm_allowed_users").value;
     state.persona_config.persona_name = document.getElementById("persona_name").value;
     state.persona_config.persona_base_prompt = document.getElementById("persona_prompt").value;
@@ -341,8 +342,8 @@ async function saveConfig(btn) {
     try {
         const res = await bridge.apiPost("save_config", payload);
         if (res.success) showToast("部署成功！");
-        else showToast("部署失败", "error");
-    } catch(e) { showToast("网络错误", "error"); }
+        else showToast("保存失败", "error");
+    } catch(e) { showToast("连接超时", "error"); }
     btn.disabled = false;
     btn.innerText = oldText;
 }

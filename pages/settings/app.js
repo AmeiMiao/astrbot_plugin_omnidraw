@@ -120,7 +120,7 @@ function bindBasicFields() {
     document.getElementById("opt_timeout").value = state.optimizer_config.optimizer_timeout;
     document.getElementById("opt_batch").value = state.optimizer_config.max_batch_count;
     document.getElementById("opt_custom").value = state.optimizer_config.optimizer_custom_prompt;
-    document.getElementById("verbose_report").checked = state.verbose_report; // 💡 绑定 UI
+    document.getElementById("verbose_report").checked = state.verbose_report;
 }
 
 function readBasicFields() {
@@ -137,7 +137,7 @@ function readBasicFields() {
     state.optimizer_config.optimizer_timeout = parseFloat(document.getElementById("opt_timeout").value);
     state.optimizer_config.max_batch_count = parseInt(document.getElementById("opt_batch").value);
     state.optimizer_config.optimizer_custom_prompt = document.getElementById("opt_custom").value;
-    state.verbose_report = document.getElementById("verbose_report").checked; // 💡 读取 UI
+    state.verbose_report = document.getElementById("verbose_report").checked;
 }
 
 function renderPresets() {
@@ -156,14 +156,14 @@ function renderProviders() {
     const html = state.providers.map((p, i) => `
         <div class="list-card">
             <div class="list-card-header">
-                <input type="text" class="input-minimal" placeholder="输入节点 ID" value="${p.id}" data-sync="prov-id" data-index="${i}">
+                <input type="text" class="input-minimal" placeholder="输入节点 ID (必填)" value="${p.id}" data-sync="prov-id" data-index="${i}">
                 <button data-action="del-provider" data-index="${i}" class="btn-text-danger">移除</button>
             </div>
             <div class="grid-2-col">
                 <div class="form-group"><label>接口模式</label>
                     <div class="chip-group">
-                        <div class="api-chip ${p.api_type==='openai_image'?'active':''}" data-sync="prov-api" data-index="${i}" data-val="openai_image">openai_image</div>
-                        <div class="api-chip ${p.api_type==='openai_chat'?'active':''}" data-sync="prov-api" data-index="${i}" data-val="openai_chat">openai_chat</div>
+                        <div class="api-chip ${p.api_type==='openai_image'?'active':''}" data-sync="prov-api" data-index="${i}" data-val="openai_image">标准生图</div>
+                        <div class="api-chip ${p.api_type==='openai_chat'?'active':''}" data-sync="prov-api" data-index="${i}" data-val="openai_chat">对话透传</div>
                     </div>
                 </div>
                 <div class="form-group"><label>接口地址 (需含/v1)</label><input type="text" class="input-modern" value="${p.base_url}" data-sync="prov-url" data-index="${i}"></div>
@@ -186,9 +186,9 @@ function renderVideoProviders() {
             <div class="grid-2-col">
                 <div class="form-group"><label>调用协议</label>
                     <div class="chip-group">
-                        <div class="api-chip ${(p.api_type||'').includes('async_task')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="async_task">异步轮询 (推荐)</div>
-                        <div class="api-chip ${(p.api_type||'').includes('openai_sync')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_sync">同步阻塞返回</div>
-                        <div class="api-chip ${(p.api_type||'').includes('openai_chat')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_chat">对话接口伪装</div>
+                        <div class="api-chip ${(p.api_type||'').includes('async_task')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="async_task">异步轮询</div>
+                        <div class="api-chip ${(p.api_type||'').includes('openai_sync')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_sync">同步阻塞</div>
+                        <div class="api-chip ${(p.api_type||'').includes('openai_chat')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_chat">对话伪装</div>
                     </div>
                 </div>
                 <div class="form-group"><label>接口地址</label><input type="text" class="input-modern" value="${p.base_url}" data-sync="vid-url" data-index="${i}"></div>
@@ -332,11 +332,13 @@ function setupEventDelegation() {
         if (s === 'p-n') state.presets[i].name = v;
         if (s === 'p-p') state.presets[i].prompt = v;
         if (s === 'node-id') { state.providers[i].id = v; }
+        if (s === 'node-api') state.providers[i].api_type = v;
         if (s === 'node-url') state.providers[i].base_url = v;
         if (s === 'node-model') state.providers[i].model = v;
         if (s === 'node-time') state.providers[i].timeout = v;
         if (s === 'node-keys') state.providers[i].api_keys = v;
         if (s === 'v-id') { state.video_providers[i].id = v; }
+        if (s === 'v-api') state.video_providers[i].api_type = v;
         if (s === 'v-url') state.video_providers[i].base_url = v;
         if (s === 'v-model') state.video_providers[i].model = v;
         if (s === 'v-time') state.video_providers[i].timeout = v;
@@ -360,7 +362,7 @@ async function saveConfig(btn) {
     const payload = {
         ...state,
         presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`),
-        verbose_report: state.verbose_report // 💡 将详细汇报开关状态发给后端
+        verbose_report: state.verbose_report
     };
 
     try {

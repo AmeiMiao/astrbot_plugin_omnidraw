@@ -29,7 +29,8 @@ class PluginConfig:
     max_batch_count: int      
     persona_name: str
     persona_base_prompt: str
-    persona_ref_images: List[str]   
+    # 🔴 强制恢复为单数：完美兼容你的 persona_manager
+    persona_ref_image: List[str]   
     allowed_users: List[str]
     optimizer_style: str
     optimizer_custom_prompt: str
@@ -82,12 +83,16 @@ class PluginConfig:
         router_conf = config_dict.get("router_config", {})
         perm_conf = config_dict.get("permission_config", {})
 
-        # 🖼️ 参考图持久化逻辑
+        # 🔴 强制硬编码路径：写入 data\plugin_data\astrbot_plugin_omnidraw\persona_refs
         raw_images = persona_conf.get("persona_ref_image", [])
-        refs_dir = os.path.join(data_dir, "persona_refs")
+        if not isinstance(raw_images, list):
+            raw_images = [raw_images] if raw_images else []
+            
+        base_dir = os.getcwd()
+        refs_dir = os.path.join(base_dir, "data", "plugin_data", "astrbot_plugin_omnidraw", "persona_refs")
         os.makedirs(refs_dir, exist_ok=True)
-        processed_images = []
         
+        processed_images = []
         for idx, img_data in enumerate(raw_images):
             if not img_data: continue
             if str(img_data).startswith("data:image"):
@@ -95,16 +100,16 @@ class PluginConfig:
                     header, base64_str = img_data.split(",", 1)
                     ext = "png"
                     if "jpeg" in header or "jpg" in header: ext = "jpg"
+                    elif "webp" in header: ext = "webp"
                     filename = f"ref_{int(time.time()*1000)}_{idx}.{ext}"
                     filepath = os.path.join(refs_dir, filename)
                     with open(filepath, "wb") as f:
                         f.write(base64.b64decode(base64_str))
                     processed_images.append(filepath)
-                except: pass
+                except Exception: pass
             else:
                 processed_images.append(str(img_data))
                 
-        # 🧹 自动清理：凡是前端删掉的，后端同步粉碎物理文件
         for filename in os.listdir(refs_dir):
             filepath = os.path.join(refs_dir, filename)
             if filepath not in processed_images and os.path.isfile(filepath):
@@ -127,7 +132,7 @@ class PluginConfig:
             max_batch_count=int(opt_conf.get("max_batch_count", 0)),
             persona_name=str(persona_conf.get("persona_name", "默认助理")),
             persona_base_prompt=str(persona_conf.get("persona_base_prompt", "")),
-            persona_ref_images=processed_images,
+            persona_ref_image=processed_images, # 🔴 撤回单数，修复报错
             allowed_users=[u.strip() for u in str(perm_conf.get("allowed_users", "")).split(",") if u.strip()],
             optimizer_style=str(opt_conf.get("optimizer_style", "手机日常原生感")),
             optimizer_custom_prompt=str(opt_conf.get("optimizer_custom_prompt", "")),

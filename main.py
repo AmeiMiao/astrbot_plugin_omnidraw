@@ -1,7 +1,7 @@
 """
 AstrBot 万象画卷插件 v3.1
 功能：支持 Gemini / gptimage2 高阶参数动态透传。
-优化：完美的多模态图片解析，规避所有数组冲突。
+优化：完美的多模态图片解析，规避所有数组冲突。内置开发者详细汇报模式。
 """
 import os
 import base64
@@ -195,7 +195,12 @@ class OmniDrawPlugin(Star):
 
         preset_prompt = self.plugin_config.presets[cmd_name]
         safe_refs = await self._process_and_save_images(raw_refs)
-        yield event.plain_result(f"{MessageEmoji.PAINTING} 收到灵感，正在绘制...")
+        
+        # 💡 详细汇报开关逻辑
+        msg = f"{MessageEmoji.PAINTING} 收到灵感，正在绘制..."
+        if self.plugin_config.verbose_report:
+            msg += f"\n[调试] 宏对应提示词: {preset_prompt}\n[调试] 识别参考图: {len(safe_refs) if safe_refs else 0}张"
+        yield event.plain_result(msg)
         
         try:
             async with aiohttp.ClientSession() as session:
@@ -219,7 +224,12 @@ class OmniDrawPlugin(Star):
         prompt, kwargs = self.cmd_parser.parse(message)
         if safe_refs: kwargs["user_refs"] = safe_refs
             
-        yield event.plain_result(f"{MessageEmoji.PAINTING} 收到灵感，正在绘制...")
+        # 💡 详细汇报开关逻辑
+        msg = f"{MessageEmoji.PAINTING} 收到灵感，正在绘制..."
+        if self.plugin_config.verbose_report:
+            msg += f"\n[调试] 最终提示词: {prompt}\n[调试] 透传参数: {len(kwargs)}个\n[调试] 识别参考图: {len(safe_refs) if safe_refs else 0}张"
+        yield event.plain_result(msg)
+        
         async with aiohttp.ClientSession() as session:
             chain_manager = ChainManager(self.plugin_config, session)
             image_url = await chain_manager.run_chain("text2img", prompt, **kwargs)
@@ -237,7 +247,6 @@ class OmniDrawPlugin(Star):
         final_prompt, extra_kwargs = self.persona_manager.build_persona_prompt(opt_actions[0] if opt_actions else user_input)
         extra_kwargs.update(kwargs)
         
-        # 💡 使用安全映射的多图数组
         persona_ref = self.plugin_config.persona_ref_images
         raw_refs = self._get_event_images(event)
         target_refs = raw_refs if raw_refs else persona_ref
@@ -248,7 +257,12 @@ class OmniDrawPlugin(Star):
             if not raw_refs: extra_kwargs.pop("persona_ref", None)
         else: extra_kwargs.pop("user_refs", None)
             
-        yield event.plain_result(f"{MessageEmoji.INFO} 正在为「{self.plugin_config.persona_name}」生成自拍，请稍候...")
+        # 💡 详细汇报开关逻辑
+        msg = f"{MessageEmoji.INFO} 正在为「{self.plugin_config.persona_name}」生成自拍，请稍候..."
+        if self.plugin_config.verbose_report:
+            msg += f"\n[调试] 构建提示词: {final_prompt}\n[调试] 透传参数: {len(extra_kwargs)}个\n[调试] 识别参考图: {len(safe_refs) if safe_refs else 0}张"
+        yield event.plain_result(msg)
+        
         chain_to_use = "selfie" if "selfie" in self.plugin_config.chains else "text2img"
         async with aiohttp.ClientSession() as session:
             chain_manager = ChainManager(self.plugin_config, session)
@@ -264,7 +278,13 @@ class OmniDrawPlugin(Star):
         if not message and not raw_refs: return
         prompt, _ = self.cmd_parser.parse(message)
         safe_refs = await self._process_and_save_images(raw_refs)
-        yield event.plain_result(f"{MessageEmoji.INFO} 视频任务已提交后台渲染...")
+        
+        # 💡 详细汇报开关逻辑
+        msg = f"{MessageEmoji.INFO} 视频任务已提交后台渲染..."
+        if self.plugin_config.verbose_report:
+            msg += f"\n[调试] 渲染提示词: {prompt}\n[调试] 识别首尾帧/参考图: {len(safe_refs) if safe_refs else 0}张"
+        yield event.plain_result(msg)
+        
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
     @llm_tool(name="generate_selfie")
@@ -283,7 +303,6 @@ class OmniDrawPlugin(Star):
             logger.info(f"📸 [LLM] 发起 {count} 张自拍。")
             optimized_actions = await self.prompt_optimizer.optimize(action, count)
             
-            # 💡 完美闭环的多图传递
             persona_ref = self.plugin_config.persona_ref_images
             raw_refs = self._get_event_images(event)
             target_refs = raw_refs if raw_refs else persona_ref

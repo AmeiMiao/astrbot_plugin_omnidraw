@@ -24,7 +24,7 @@
             
             <nav class="nav-menu">
                 <div class="nav-label">GATEWAY</div>
-                <button class="nav-item active" data-target="tab-basic"><span>⚙️</span> 全局配置</button>
+                <button class="nav-item active" data-target="tab-basic"><span>🛡️</span> 访问权限</button>
                 <div class="nav-label">CREATIVE</div>
                 <button class="nav-item" data-target="tab-persona"><span>🎭</span> 人设档案</button>
                 <button class="nav-item" data-target="tab-hub"><span>🔗</span> 生成调度</button>
@@ -42,19 +42,11 @@
 
         <main class="content">
             <div id="tab-basic" class="tab-pane active">
-                <div class="page-header"><h2>全局配置</h2><p>管控系统访问权限与全局调试设定。</p></div>
+                <div class="page-header"><h2>安全与权限</h2><p>管控谁可以调用本算力站生成内容。</p></div>
                 <section class="card glass-card">
                     <div class="form-group">
                         <label>许可白名单 (QQ号)</label>
                         <input type="text" id="perm_allowed_users" class="input-glass" placeholder="输入QQ号，逗号分隔。" />
-                    </div>
-                    <div class="divider"></div>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <label style="margin-bottom: 4px; display: block; color: var(--text-main); font-size: 13px;">详细汇报模式 (Verbose)</label>
-                            <span style="font-size: 11px; color: var(--text-muted);">开启后在聊天中输出提示词等排查信息。</span>
-                        </div>
-                        <div class="switch-wrapper"><input type="checkbox" id="verbose_report" class="ios-switch"></div>
                     </div>
                 </section>
             </div>
@@ -64,7 +56,7 @@
                 <div class="grid-row">
                     <section class="card glass-card">
                         <div class="form-group"><label>实体代号</label><input type="text" id="persona_name" class="input-glass" /></div>
-                        <div class="form-group"><label>底层特征序列</label><textarea id="persona_prompt" rows="5" class="input-glass"></textarea></div>
+                        <div class="form-group"><label>底层特征序列 (Base Prompt)</label><textarea id="persona_prompt" rows="5" class="input-glass"></textarea></div>
                     </section>
                     <section class="card glass-card">
                         <div class="form-group">
@@ -95,13 +87,16 @@
             <div id="tab-optimizer" class="tab-pane">
                 <div class="page-header"><h2>副脑引擎</h2></div>
                 <section class="card glass-card highlight-glass">
-                    <div class="card-header"><h3>Prompt Optimizer</h3><div class="switch-wrapper"><input type="checkbox" id="opt_enable" class="ios-switch"></div></div>
+                    <div class="card-header">
+                        <h3>提示词副脑 (Prompt Optimizer)</h3>
+                        <div class="switch-wrapper"><input type="checkbox" id="opt_enable" class="ios-switch"></div>
+                    </div>
                     <div class="grid-2-col">
                         <div class="form-group"><label>画风协议</label><select id="opt_style" class="input-glass"><option value="手机日常原生感">手机日常原生感</option><option value="自拍专用极致真实">自拍专用极致真实</option><option value="电影级光影大片">电影级光影大片</option><option value="日系插画大师">日系插画大师</option><option value="3D 潮玩盲盒">3D 潮玩盲盒</option><option value="自定义模式">自定义模式</option></select></div>
                         <div class="form-group"><label>处理节点</label><div class="node-selector" id="sel-opt-chain"></div><input type="hidden" id="opt_chain" /></div>
                         <div class="form-group"><label>模型核心</label><input type="text" id="opt_model" class="input-glass" /></div>
                         <div class="form-group"><label>超时限制 (秒)</label><input type="number" id="opt_timeout" class="input-glass" /></div>
-                        <div class="form-group full-width"><label>并发上限</label><input type="number" id="opt_batch" class="input-glass" /></div>
+                        <div class="form-group full-width"><label>并发上限 (0 为不限)</label><input type="number" id="opt_batch" class="input-glass" /></div>
                         <div class="form-group full-width"><label>自定义注入要求</label><textarea id="opt_custom" rows="2" class="input-glass"></textarea></div>
                     </div>
                 </section>

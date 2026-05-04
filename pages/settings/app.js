@@ -24,7 +24,7 @@ function renderSelectors() {
             const nodeId = node.id;
             if(!nodeId) return '';
             return `<div class="selector-chip ${nodeId === currentVal ? 'active' : ''}" data-id="${nodeId}" data-input="${inputId}">${nodeId}</div>`;
-        }).join('') || '<span class="empty-hint">请先在「算力集群」中配置节点 ID</span>';
+        }).join('') || '<span class="empty-hint">请先在「算力集群」中配置并填写节点 ID</span>';
     };
     renderTo('sel-route-img', state.providers, 'route_img');
     renderTo('sel-route-selfie', state.providers, 'route_selfie');
@@ -64,7 +64,7 @@ function renderProviders() {
                 </div>
                 <div class="form-group"><label>接口地址 (需含/v1)</label><input type="text" class="input-glass" value="${p.base_url}" data-sync="prov-url" data-index="${i}"></div>
                 <div class="form-group full-width">
-                    <label>算力模型池 (点击设为默认)</label>
+                    <label>算力模型池</label>
                     <div class="chip-group">
                         ${(p.available_models || []).map((m, mIdx) => `
                             <div class="api-chip ${p.model === m ? 'active' : ''}" data-sync="prov-model-select" data-index="${i}" data-val="${m}">
@@ -137,12 +137,12 @@ function renderPresets() {
 
 async function init() {
     const context = await bridge.ready();
-    const raw = await bridge.apiGet("get_config") || {};
+    const rawConfig = await bridge.apiGet("get_config") || {};
     
-    const perm = raw.permission_config || {};
-    const pers = raw.persona_config || {};
-    const opt = raw.optimizer_config || {};
-    const router = raw.router_config || {};
+    const perm = rawConfig.permission_config || {};
+    const pers = rawConfig.persona_config || {};
+    const opt = rawConfig.optimizer_config || {};
+    const router = rawConfig.router_config || {};
 
     state.permission_config.allowed_users = perm.allowed_users || "";
     state.persona_config.persona_name = pers.persona_name || "默认助理";
@@ -160,35 +160,31 @@ async function init() {
     state.router_config.chain_selfie = router.chain_selfie || "node_1";
     state.router_config.chain_video = router.chain_video || "video_node_1";
 
-    state.presets = (raw.presets || []).map(p => typeof p === 'string' ? { name: p.split(':')[0], prompt: p.split(':')[1] } : p);
-    state.providers = (raw.providers || []).map(p => ({
-        id: p.id || '', api_type: p.api_type || 'openai_image', base_url: p.base_url || '',
-        model: p.model || '', timeout: p.timeout || 60, available_models: p.available_models || [],
-        api_keys: Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || '')
-    }));
-    state.video_providers = (raw.video_providers || []).map(p => ({
-        id: p.id || '', api_type: p.api_type || 'async_task', base_url: p.base_url || '',
-        model: p.model || '', timeout: p.timeout || 300, available_models: p.available_models || [],
-        api_keys: Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || '')
-    }));
-    state.verbose_report = raw.verbose_report || false;
-
-    // 回显数据
-    const setVal = (id, v) => { const el = document.getElementById(id); if(el) el.value = v; };
-    setVal("perm_allowed_users", state.permission_config.allowed_users);
-    setVal("persona_name", state.persona_config.persona_name);
-    setVal("persona_prompt", state.persona_config.persona_base_prompt);
-    setVal("route_img", state.router_config.chain_text2img);
-    setVal("route_selfie", state.router_config.chain_selfie);
-    setVal("route_video", state.router_config.chain_video);
-    setVal("opt_style", state.optimizer_config.optimizer_style);
-    setVal("opt_chain", state.optimizer_config.chain_optimizer);
-    setVal("opt_model", state.optimizer_config.optimizer_model);
-    setVal("opt_timeout", state.optimizer_config.optimizer_timeout);
-    setVal("opt_batch", state.optimizer_config.max_batch_count);
+    state.presets = (rawConfig.presets || []).map(p => typeof p === 'string' ? { name: p.split(':')[0], prompt: p.split(':')[1] } : p);
     
-    if(document.getElementById("opt_enable")) document.getElementById("opt_enable").checked = state.optimizer_config.enable_optimizer;
-    if(document.getElementById("verbose_report")) document.getElementById("verbose_report").checked = state.verbose_report;
+    const parseList = (list) => (list || []).map(p => ({
+        id: p.id || '', api_type: p.api_type || '', base_url: p.base_url || '',
+        model: p.model || "", available_models: p.available_models || [],
+        timeout: p.timeout || 60, api_keys: Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || '')
+    }));
+    state.providers = parseList(rawConfig.providers);
+    state.video_providers = parseList(rawConfig.video_providers);
+    state.verbose_report = rawConfig.verbose_report || false;
+
+    // 回显
+    document.getElementById("perm_allowed_users").value = state.permission_config.allowed_users;
+    document.getElementById("persona_name").value = state.persona_config.persona_name;
+    document.getElementById("persona_prompt").value = state.persona_config.persona_base_prompt;
+    document.getElementById("route_img").value = state.router_config.chain_text2img;
+    document.getElementById("route_selfie").value = state.router_config.chain_selfie;
+    document.getElementById("route_video").value = state.router_config.chain_video;
+    document.getElementById("opt_enable").checked = state.optimizer_config.enable_optimizer;
+    document.getElementById("opt_style").value = state.optimizer_config.optimizer_style;
+    document.getElementById("opt_chain").value = state.optimizer_config.chain_optimizer;
+    document.getElementById("opt_model").value = state.optimizer_config.optimizer_model;
+    document.getElementById("opt_timeout").value = state.optimizer_config.optimizer_timeout;
+    document.getElementById("opt_batch").value = state.optimizer_config.max_batch_count;
+    document.getElementById("verbose_report").checked = state.verbose_report;
 
     renderProviders();
     renderVideoProviders();
@@ -207,20 +203,16 @@ function setupEventDelegation() {
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             navItem.classList.add('active');
             document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-            const target = document.getElementById(navItem.dataset.target);
-            if(target) target.classList.add('active');
+            document.getElementById(navItem.dataset.target).classList.add('active');
             return;
         }
 
         const chip = e.target.closest('.selector-chip');
         if (chip) {
             const inputId = chip.dataset.input;
-            const hiddenInput = document.getElementById(inputId);
-            if (hiddenInput) {
-                hiddenInput.value = chip.dataset.id;
-                document.querySelectorAll(`.selector-chip[data-input="${inputId}"]`).forEach(c => c.classList.remove('active'));
-                chip.classList.add('active');
-            }
+            document.getElementById(inputId).value = chip.dataset.id;
+            document.querySelectorAll(`.selector-chip[data-input="${inputId}"]`).forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
             return;
         }
 
@@ -246,10 +238,8 @@ function setupEventDelegation() {
         if (act === 'save-config') saveConfig(btn);
         if (act === 'add-preset') { state.presets.push({name:"", prompt:""}); renderPresets(); }
         if (act === 'del-preset') { state.presets.splice(idx, 1); renderPresets(); }
-        
         if (act === 'add-provider') { state.providers.push({id:`node_${state.providers.length+1}`, api_type:"openai_image", base_url:"", model:"", available_models:[], api_keys:"", timeout:60}); renderProviders(); renderSelectors(); }
         if (act === 'del-provider') { state.providers.splice(idx, 1); renderProviders(); renderSelectors(); }
-        
         if (act === 'add-video-provider') { state.video_providers.push({id:`v_node_${state.video_providers.length+1}`, api_type:"async_task", base_url:"", model:"", available_models:[], api_keys:"", timeout:300}); renderVideoProviders(); renderSelectors(); }
         if (act === 'del-video-provider') { state.video_providers.splice(idx, 1); renderVideoProviders(); renderSelectors(); }
 
@@ -261,8 +251,8 @@ function setupEventDelegation() {
             const val = document.getElementById(`new-model-vid-${idx}`).value.trim();
             if(val) { state.video_providers[idx].available_models.push(val); if(!state.video_providers[idx].model) state.video_providers[idx].model = val; renderVideoProviders(); }
         }
-        if (act === 'del-prov-model') { e.stopPropagation(); const midx = parseInt(btn.dataset.midx, 10); state.providers[idx].available_models.splice(midx, 1); renderProviders(); }
-        if (act === 'del-vid-model') { e.stopPropagation(); const midx = parseInt(btn.dataset.midx, 10); state.video_providers[idx].available_models.splice(midx, 1); renderVideoProviders(); }
+        if (act === 'del-prov-model') { e.stopPropagation(); state.providers[idx].available_models.splice(parseInt(btn.dataset.midx, 10), 1); renderProviders(); }
+        if (act === 'del-vid-model') { e.stopPropagation(); state.video_providers[idx].available_models.splice(parseInt(btn.dataset.midx, 10), 1); renderVideoProviders(); }
         if (act === 'del-persona-img') { state.persona_config.persona_ref_image.splice(idx, 1); renderPersonaImages(); }
     });
 
@@ -275,7 +265,7 @@ function setupEventDelegation() {
         fileInput.value = '';
     });
 
-    // 💡 修复重点：标识符映射对齐，确保每一个 input 都能同步到内存
+    // 🌟 关键修复点：将错位的标识符修正为模板中定义的前缀
     document.body.addEventListener('input', (e) => {
         const input = e.target;
         const s = input.dataset.sync;
@@ -302,31 +292,28 @@ function setupEventDelegation() {
 async function saveConfig(btn) {
     btn.disabled = true;
     const oldText = btn.innerHTML;
-    btn.innerHTML = `<span class="spinner">↻</span> 部署中...`;
+    btn.innerHTML = `部署中...`;
     
+    // 强制刷新基础字段
+    const val = (id) => document.getElementById(id).value;
+    state.permission_config.allowed_users = val("perm_allowed_users");
+    state.persona_config.persona_name = val("persona_name");
+    state.persona_config.persona_base_prompt = val("persona_prompt");
+    state.optimizer_config.enable_optimizer = document.getElementById("opt_enable").checked;
+    state.optimizer_config.optimizer_style = val("opt_style");
+    state.optimizer_config.chain_optimizer = document.getElementById("opt_chain").value;
+    state.optimizer_config.optimizer_model = val("opt_model");
+    state.optimizer_config.optimizer_timeout = parseFloat(val("opt_timeout"));
+    state.optimizer_config.max_batch_count = parseInt(val("opt_batch"));
+    state.verbose_report = document.getElementById("verbose_report").checked;
+    state.router_config.chain_text2img = val("route_img");
+    state.router_config.chain_selfie = val("route_selfie");
+    state.router_config.chain_video = val("route_video");
+
     try {
-        const getV = (id) => document.getElementById(id) ? document.getElementById(id).value : "";
-        const getC = (id) => document.getElementById(id) ? document.getElementById(id).checked : false;
-
-        state.permission_config.allowed_users = getV("perm_allowed_users");
-        state.persona_config.persona_name = getV("persona_name");
-        state.persona_config.persona_base_prompt = getV("persona_prompt");
-        state.optimizer_config.enable_optimizer = getC("opt_enable");
-        state.optimizer_config.optimizer_style = getV("opt_style");
-        state.optimizer_config.chain_optimizer = getV("opt_chain");
-        state.optimizer_config.optimizer_model = getV("opt_model");
-        state.optimizer_config.optimizer_timeout = parseFloat(getV("opt_timeout")) || 15;
-        state.optimizer_config.max_batch_count = parseInt(getV("opt_batch")) || 0;
-        state.verbose_report = getC("verbose_report");
-
-        state.router_config.chain_text2img = getV("route_img");
-        state.router_config.chain_selfie = getV("route_selfie");
-        state.router_config.chain_video = getV("route_video");
-
-        const payload = { ...state, presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`) };
-        const res = await bridge.apiPost("save_config", payload);
+        const res = await bridge.apiPost("save_config", { ...state, presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`) });
         if (res.success) showToast("部署成功！");
-        else showToast("保存异常", "error");
+        else showToast("部署异常", "error");
     } catch(e) { showToast("脚本错误", "error"); }
     btn.disabled = false;
     btn.innerHTML = oldText;

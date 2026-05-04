@@ -47,7 +47,6 @@ class OmniDrawPlugin(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
         
-        # 🔴 强制硬编码路径：完美对齐你的 data\plugin_data\astrbot_plugin_omnidraw
         base_dir = os.getcwd()
         self.data_dir = os.path.join(base_dir, "data", "plugin_data", "astrbot_plugin_omnidraw")
         os.makedirs(self.data_dir, exist_ok=True)
@@ -139,7 +138,6 @@ class OmniDrawPlugin(Star):
         processed_paths = []
         if not raw_images: return processed_paths
         
-        # 将会严格落入 data/plugin_data/astrbot_plugin_omnidraw/user_refs
         save_dir = os.path.join(self.data_dir, "user_refs")
         os.makedirs(save_dir, exist_ok=True)
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
@@ -373,8 +371,8 @@ class OmniDrawPlugin(Star):
         final_prompt, extra_kwargs = self.persona_manager.build_persona_prompt(opt_actions[0] if opt_actions else user_input)
         extra_kwargs.update(kwargs)
         
-        # 🔴 强制使用单数：persona_ref_image，完美对齐你的 persona_manager.py
-        persona_ref = self.plugin_config.persona_ref_image
+        # 🔴 调用本脚本专用列表字段，底层依然可以拿单数爽
+        persona_ref = self.plugin_config.persona_ref_images
         raw_refs = self._get_event_images(event)
         target_refs = raw_refs if raw_refs else persona_ref
         
@@ -413,7 +411,7 @@ class OmniDrawPlugin(Star):
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
     # ==========================================
-    # 🤖 LLM 工具区 (参数完美保留)
+    # 🤖 LLM 工具区 (参数一字不落，全部保留)
     # ==========================================
     @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str, count: int = 1, aspect_ratio: str = "", size: str = "", extra_params: str = "") -> str:
@@ -431,8 +429,9 @@ class OmniDrawPlugin(Star):
             count = min(max(1, self._normalize_count(count)), self.plugin_config.max_batch_count or 10)
             optimized_actions = await self.prompt_optimizer.optimize(action, count)
             
-            # 🔴 强制使用单数：persona_ref_image
-            persona_ref = self.plugin_config.persona_ref_image
+            # 🔴 调用本脚本专用的列表字段
+            persona_ref = self.plugin_config.persona_ref_images
+            
             raw_refs = self._get_event_images(event)
             target_refs = raw_refs if raw_refs else persona_ref
             safe_refs = await self._process_and_save_images(target_refs)

@@ -36,12 +36,17 @@ function renderSelectors() {
 function renderPersonaImages() {
     const container = document.getElementById('persona-upload-container');
     container.querySelectorAll('.image-preview-wrapper').forEach(el => el.remove());
+    
     const trigger = document.getElementById('persona-upload-trigger');
     const images = state.persona_config.persona_ref_image || [];
+    
     images.forEach((url, idx) => {
         const wrapper = document.createElement('div');
         wrapper.className = 'image-preview-wrapper';
-        wrapper.innerHTML = `<img src="${url}" class="image-preview" alt="Ref" /><button class="btn-del-img" data-action="del-persona-img" data-index="${idx}">×</button>`;
+        wrapper.innerHTML = `
+            <img src="${url}" class="image-preview" alt="Ref" />
+            <button class="btn-del-img" data-action="del-persona-img" data-index="${idx}">×</button>
+        `;
         container.insertBefore(wrapper, trigger);
     });
 }
@@ -94,7 +99,7 @@ async function init() {
         api_keys: Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || p['API密钥'] || '')
     }));
 
-    // 💡 提取 Verbose 开关状态
+    // 💡 读取开关状态
     state.verbose_report = rawConfig.verbose_report || false;
 
     bindBasicFields();
@@ -120,7 +125,7 @@ function bindBasicFields() {
     document.getElementById("opt_timeout").value = state.optimizer_config.optimizer_timeout;
     document.getElementById("opt_batch").value = state.optimizer_config.max_batch_count;
     document.getElementById("opt_custom").value = state.optimizer_config.optimizer_custom_prompt;
-    document.getElementById("verbose_report").checked = state.verbose_report;
+    document.getElementById("verbose_report").checked = state.verbose_report; // 💡 绑定UI
 }
 
 function readBasicFields() {
@@ -137,27 +142,27 @@ function readBasicFields() {
     state.optimizer_config.optimizer_timeout = parseFloat(document.getElementById("opt_timeout").value);
     state.optimizer_config.max_batch_count = parseInt(document.getElementById("opt_batch").value);
     state.optimizer_config.optimizer_custom_prompt = document.getElementById("opt_custom").value;
-    state.verbose_report = document.getElementById("verbose_report").checked;
+    state.verbose_report = document.getElementById("verbose_report").checked; // 💡 读取UI
 }
 
 function renderPresets() {
     const html = state.presets.map((p, i) => `
         <div class="list-item">
-            <input type="text" class="input-modern preset-name" style="width: 140px; border:none; background:transparent;" placeholder="快捷指令名" value="${p.name}" data-sync="preset-name" data-index="${i}">
+            <input type="text" class="input-glass preset-name" style="width: 140px; border:none; background:transparent;" placeholder="快捷指令名" value="${p.name}" data-sync="preset-name" data-index="${i}">
             <span style="color:var(--text-muted); font-weight: bold; margin: 0 10px;">→</span>
-            <input type="text" class="input-modern preset-prompt" style="flex:1; border:none; background:transparent;" placeholder="底层的英文描述与参数" value="${p.prompt}" data-sync="preset-prompt" data-index="${i}">
-            <button data-action="del-preset" data-index="${i}" class="btn-text-danger" style="padding: 4px; font-size:16px;">×</button>
+            <input type="text" class="input-glass preset-prompt" style="flex:1; border:none; background:transparent;" placeholder="底层的英文描述与参数" value="${p.prompt}" data-sync="preset-prompt" data-index="${i}">
+            <button data-action="del-preset" data-index="${i}" class="btn-glass-secondary" style="border:none; color:var(--text-muted); font-size:16px;">×</button>
         </div>
     `).join('');
-    document.getElementById("presets-container").innerHTML = html || '<div class="empty-tip">尚未配置快捷指令</div>';
+    document.getElementById("presets-container").innerHTML = html || '<div style="text-align:center; padding: 30px; color: var(--text-muted);">尚未配置快捷指令</div>';
 }
 
 function renderProviders() {
     const html = state.providers.map((p, i) => `
-        <div class="list-card">
-            <div class="list-card-header">
-                <input type="text" class="input-minimal" placeholder="输入节点 ID (必填)" value="${p.id}" data-sync="prov-id" data-index="${i}">
-                <button data-action="del-provider" data-index="${i}" class="btn-text-danger">移除</button>
+        <div class="glass-card" style="padding: 24px; margin-bottom: 16px;">
+            <div class="card-header" style="margin-bottom: 16px; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 12px;">
+                <input type="text" class="input-glass" style="width: 200px; font-weight:bold; font-size: 16px; background: transparent; border:none; border-bottom: 1px solid transparent;" placeholder="输入节点 ID" value="${p.id}" data-sync="prov-id" data-index="${i}">
+                <button data-action="del-provider" data-index="${i}" style="background:transparent; border:none; color:var(--danger); font-weight:bold; cursor:pointer;">移除</button>
             </div>
             <div class="grid-2-col">
                 <div class="form-group"><label>接口模式</label>
@@ -166,10 +171,10 @@ function renderProviders() {
                         <div class="api-chip ${p.api_type==='openai_chat'?'active':''}" data-sync="prov-api" data-index="${i}" data-val="openai_chat">对话透传</div>
                     </div>
                 </div>
-                <div class="form-group"><label>接口地址 (需含/v1)</label><input type="text" class="input-modern" value="${p.base_url}" data-sync="prov-url" data-index="${i}"></div>
-                <div class="form-group"><label>模型名称</label><input type="text" class="input-modern" value="${p.model}" data-sync="prov-model" data-index="${i}"></div>
-                <div class="form-group"><label>请求超时</label><input type="number" class="input-modern" value="${p.timeout}" data-sync="prov-time" data-index="${i}"></div>
-                <div class="form-group full-width"><label>API Keys</label><textarea class="input-modern" rows="1" data-sync="prov-keys" data-index="${i}">${p.api_keys}</textarea></div>
+                <div class="form-group"><label>接口地址 (需含/v1)</label><input type="text" class="input-glass" value="${p.base_url}" data-sync="prov-url" data-index="${i}"></div>
+                <div class="form-group"><label>模型名称</label><input type="text" class="input-glass" value="${p.model}" data-sync="prov-model" data-index="${i}"></div>
+                <div class="form-group"><label>请求超时</label><input type="number" class="input-glass" value="${p.timeout}" data-sync="prov-time" data-index="${i}"></div>
+                <div class="form-group full-width"><label>API Keys</label><textarea class="input-glass" rows="1" data-sync="prov-keys" data-index="${i}">${p.api_keys}</textarea></div>
             </div>
         </div>
     `).join('');
@@ -178,10 +183,10 @@ function renderProviders() {
 
 function renderVideoProviders() {
     const html = state.video_providers.map((p, i) => `
-        <div class="list-card">
-            <div class="list-card-header">
-                <input type="text" class="input-minimal" placeholder="输入视频节点 ID" value="${p.id}" data-sync="vid-id" data-index="${i}">
-                <button data-action="del-video-provider" data-index="${i}" class="btn-text-danger">移除</button>
+        <div class="glass-card" style="padding: 24px; margin-bottom: 16px;">
+            <div class="card-header" style="margin-bottom: 16px; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 12px;">
+                <input type="text" class="input-glass" style="width: 200px; font-weight:bold; font-size: 16px; background: transparent; border:none; border-bottom: 1px solid transparent;" placeholder="输入视频节点 ID" value="${p.id}" data-sync="vid-id" data-index="${i}">
+                <button data-action="del-video-provider" data-index="${i}" style="background:transparent; border:none; color:var(--danger); font-weight:bold; cursor:pointer;">移除</button>
             </div>
             <div class="grid-2-col">
                 <div class="form-group"><label>调用协议</label>
@@ -191,10 +196,10 @@ function renderVideoProviders() {
                         <div class="api-chip ${(p.api_type||'').includes('openai_chat')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_chat">对话伪装</div>
                     </div>
                 </div>
-                <div class="form-group"><label>接口地址</label><input type="text" class="input-modern" value="${p.base_url}" data-sync="vid-url" data-index="${i}"></div>
-                <div class="form-group"><label>模型名称</label><input type="text" class="input-modern" value="${p.model}" data-sync="vid-model" data-index="${i}"></div>
-                <div class="form-group"><label>请求超时</label><input type="number" class="input-modern" value="${p.timeout}" data-sync="vid-time" data-index="${i}"></div>
-                <div class="form-group full-width"><label>API Keys</label><textarea class="input-modern" rows="1" data-sync="vid-keys" data-index="${i}">${p.api_keys}</textarea></div>
+                <div class="form-group"><label>接口地址</label><input type="text" class="input-glass" value="${p.base_url}" data-sync="vid-url" data-index="${i}"></div>
+                <div class="form-group"><label>模型名称</label><input type="text" class="input-glass" value="${p.model}" data-sync="vid-model" data-index="${i}"></div>
+                <div class="form-group"><label>请求超时</label><input type="number" class="input-glass" value="${p.timeout}" data-sync="vid-time" data-index="${i}"></div>
+                <div class="form-group full-width"><label>API Keys</label><textarea class="input-glass" rows="1" data-sync="vid-keys" data-index="${i}">${p.api_keys}</textarea></div>
             </div>
         </div>
     `).join('');
@@ -247,12 +252,12 @@ function setupEventDelegation() {
             return;
         }
 
+        // 新增：算力集群按钮组点击事件
         const apiChip = e.target.closest('.api-chip');
         if (apiChip) {
             const sync = apiChip.getAttribute('data-sync');
             const idx = parseInt(apiChip.getAttribute('data-index'), 10);
             const val = apiChip.getAttribute('data-val');
-            
             if (sync === 'prov-api') {
                 state.providers[idx].api_type = val;
                 renderProviders();
@@ -332,13 +337,11 @@ function setupEventDelegation() {
         if (s === 'p-n') state.presets[i].name = v;
         if (s === 'p-p') state.presets[i].prompt = v;
         if (s === 'node-id') { state.providers[i].id = v; }
-        if (s === 'node-api') state.providers[i].api_type = v;
         if (s === 'node-url') state.providers[i].base_url = v;
         if (s === 'node-model') state.providers[i].model = v;
         if (s === 'node-time') state.providers[i].timeout = v;
         if (s === 'node-keys') state.providers[i].api_keys = v;
         if (s === 'v-id') { state.video_providers[i].id = v; }
-        if (s === 'v-api') state.video_providers[i].api_type = v;
         if (s === 'v-url') state.video_providers[i].base_url = v;
         if (s === 'v-model') state.video_providers[i].model = v;
         if (s === 'v-time') state.video_providers[i].timeout = v;
@@ -362,7 +365,7 @@ async function saveConfig(btn) {
     const payload = {
         ...state,
         presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`),
-        verbose_report: state.verbose_report
+        verbose_report: state.verbose_report // 💡 保存开关状态
     };
 
     try {

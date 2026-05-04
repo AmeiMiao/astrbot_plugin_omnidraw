@@ -64,7 +64,7 @@ function renderProviders() {
                 </div>
                 <div class="form-group"><label>接口地址 (需含/v1)</label><input type="text" class="input-glass" value="${p.base_url}" data-sync="prov-url" data-index="${i}"></div>
                 <div class="form-group full-width">
-                    <label>算力模型池 (点击设为默认)</label>
+                    <label>算力模型池</label>
                     <div class="chip-group" style="margin-bottom: 8px;">
                         ${(p.available_models || []).map((m, mIdx) => `
                             <div class="api-chip ${p.model === m ? 'active' : ''}" data-sync="prov-model-select" data-index="${i}" data-val="${m}">
@@ -74,7 +74,7 @@ function renderProviders() {
                     </div>
                     <div style="display:flex; gap:10px;">
                         <input type="text" class="input-glass" id="new-model-img-${i}" placeholder="添加模型名称" style="flex:1;">
-                        <button data-action="add-prov-model" data-index="${i}" class="btn-glass-secondary">添加</button>
+                        <button data-action="add-prov-model" data-index="${i}" class="btn-glass-secondary">添加模型</button>
                     </div>
                 </div>
                 <div class="form-group"><label>超时(秒)</label><input type="number" class="input-glass" value="${p.timeout}" data-sync="prov-time" data-index="${i}"></div>
@@ -98,7 +98,6 @@ function renderVideoProviders() {
                     <div class="chip-group">
                         <div class="api-chip ${p.api_type==='async_task'?'active':''}" data-sync="vid-api" data-index="${i}" data-val="async_task">异步轮询</div>
                         <div class="api-chip ${p.api_type==='openai_sync'?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_sync">同步阻塞</div>
-                        <div class="api-chip ${p.api_type==='openai_chat'?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_chat">对话伪装</div>
                     </div>
                 </div>
                 <div class="form-group"><label>接口地址</label><input type="text" class="input-glass" value="${p.base_url}" data-sync="vid-url" data-index="${i}"></div>
@@ -112,8 +111,8 @@ function renderVideoProviders() {
                         `).join('')}
                     </div>
                     <div style="display:flex; gap:10px;">
-                        <input type="text" class="input-glass" id="new-model-vid-${i}" placeholder="添加视频模型" style="flex:1;">
-                        <button data-action="add-vid-model" data-index="${i}" class="btn-glass-secondary">添加</button>
+                        <input type="text" class="input-glass" id="new-model-vid-${i}" placeholder="输入视频模型名称" style="flex:1;">
+                        <button data-action="add-vid-model" data-index="${i}" class="btn-glass-secondary">添加模型</button>
                     </div>
                 </div>
                 <div class="form-group"><label>超时(秒)</label><input type="number" class="input-glass" value="${p.timeout}" data-sync="vid-time" data-index="${i}"></div>
@@ -138,12 +137,12 @@ function renderPresets() {
 
 async function init() {
     const context = await bridge.ready();
-    const raw = await bridge.apiGet("get_config") || {};
+    const rawConfig = await bridge.apiGet("get_config") || {};
     
-    const perm = raw.permission_config || {};
-    const pers = raw.persona_config || {};
-    const opt = raw.optimizer_config || {};
-    const router = raw.router_config || {};
+    const perm = rawConfig.permission_config || {};
+    const pers = rawConfig.persona_config || {};
+    const opt = rawConfig.optimizer_config || {};
+    const router = rawConfig.router_config || {};
 
     state.permission_config.allowed_users = perm.allowed_users || "";
     state.persona_config.persona_name = pers.persona_name || "默认助理";
@@ -156,15 +155,13 @@ async function init() {
     state.optimizer_config.optimizer_model = opt.optimizer_model || "gpt-4o-mini";
     state.optimizer_config.optimizer_timeout = opt.optimizer_timeout || 15;
     state.optimizer_config.max_batch_count = opt.max_batch_count || 0;
-    state.optimizer_config.optimizer_custom_prompt = opt.optimizer_custom_prompt || "";
 
     state.router_config.chain_text2img = router.chain_text2img || "node_1";
     state.router_config.chain_selfie = router.chain_selfie || "node_1";
     state.router_config.chain_video = router.chain_video || "video_node_1";
 
-    state.presets = (raw.presets || []).map(p => typeof p === 'string' ? { name: p.split(':')[0], prompt: p.split(':')[1] } : p);
+    state.presets = (rawConfig.presets || []).map(p => typeof p === 'string' ? { name: p.split(':')[0], prompt: p.split(':')[1] } : p);
     
-    // 多模型适配解析
     const parseList = (list) => (list || []).map(p => {
         let avail = p.available_models || [];
         if(avail.length === 0) {
@@ -177,11 +174,10 @@ async function init() {
             timeout: p.timeout || 60, api_keys: Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || '')
         };
     });
-    state.providers = parseList(raw.providers);
-    state.video_providers = parseList(raw.video_providers);
-    state.verbose_report = raw.verbose_report || false;
+    state.providers = parseList(rawConfig.providers);
+    state.video_providers = parseList(rawConfig.video_providers);
+    state.verbose_report = rawConfig.verbose_report || false;
 
-    // 回显
     document.getElementById("perm_allowed_users").value = state.permission_config.allowed_users;
     document.getElementById("persona_name").value = state.persona_config.persona_name;
     document.getElementById("persona_prompt").value = state.persona_config.persona_base_prompt;
@@ -283,7 +279,7 @@ function setupEventDelegation() {
         fileInput.value = '';
     });
 
-    // 🌟 关键修复：标识符必须和渲染函数中的 data-sync 完全一致！
+    // 🌟 修复重点：标识符必须和渲染函数中的 data-sync 完全一致！
     document.body.addEventListener('input', (e) => {
         const input = e.target;
         const s = input.dataset.sync;
@@ -292,6 +288,7 @@ function setupEventDelegation() {
         const v = input.value;
         if (s === 'p-n') state.presets[i].name = v;
         if (s === 'p-p') state.presets[i].prompt = v;
+        // 👇 这里对齐了 prov- 和 vid- 前缀
         if (s === 'prov-id') { state.providers[i].id = v; renderSelectors(); }
         if (s === 'prov-url') state.providers[i].base_url = v;
         if (s === 'prov-time') state.providers[i].timeout = v;
@@ -303,28 +300,32 @@ function setupEventDelegation() {
     });
 }
 
+function readBasicFields() {
+    const val = (id) => document.getElementById(id).value;
+    state.permission_config.allowed_users = val("perm_allowed_users");
+    state.persona_config.persona_name = val("persona_name");
+    state.persona_config.persona_base_prompt = val("persona_prompt");
+    state.optimizer_config.enable_optimizer = document.getElementById("opt_enable").checked;
+    state.optimizer_config.optimizer_style = val("opt_style");
+    state.optimizer_config.chain_optimizer = document.getElementById("opt_chain").value;
+    state.optimizer_config.optimizer_model = val("opt_model");
+    state.optimizer_config.optimizer_timeout = parseFloat(val("opt_timeout"));
+    state.optimizer_config.max_batch_count = parseInt(val("opt_batch"));
+    state.verbose_report = document.getElementById("verbose_report").checked;
+    state.router_config.chain_text2img = val("route_img");
+    state.router_config.chain_selfie = val("route_selfie");
+    state.router_config.chain_video = val("route_video");
+}
+
 async function saveConfig(btn) {
     btn.disabled = true;
     const oldText = btn.innerHTML;
     btn.innerHTML = `<span class="spinner">↻</span> 部署中...`;
     
     try {
-        const val = (id) => document.getElementById(id).value;
-        state.permission_config.allowed_users = val("perm_allowed_users");
-        state.persona_config.persona_name = val("persona_name");
-        state.persona_config.persona_base_prompt = val("persona_prompt");
-        state.optimizer_config.enable_optimizer = document.getElementById("opt_enable").checked;
-        state.optimizer_config.optimizer_style = val("opt_style");
-        state.optimizer_config.chain_optimizer = document.getElementById("opt_chain").value;
-        state.optimizer_config.optimizer_model = val("opt_model");
-        state.optimizer_config.optimizer_timeout = parseFloat(val("opt_timeout"));
-        state.optimizer_config.max_batch_count = parseInt(val("opt_batch"));
-        state.verbose_report = document.getElementById("verbose_report").checked;
-        state.router_config.chain_text2img = val("route_img");
-        state.router_config.chain_selfie = val("route_selfie");
-        state.router_config.chain_video = val("route_video");
-
-        const res = await bridge.apiPost("save_config", { ...state, presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`) });
+        readBasicFields();
+        const payload = { ...state, presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`) };
+        const res = await bridge.apiPost("save_config", payload);
         if (res.success) showToast("部署成功！");
         else showToast("部署异常", "error");
     } catch(e) { showToast("脚本错误", "error"); }

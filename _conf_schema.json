@@ -1,59 +1,8 @@
 {
-    "verbose_report": {
-        "title": "详细汇报模式 (Verbose)",
-        "description": "【请前往侧边栏-万象画卷界面进行配置】",
-        "type": "bool",
-        "default": false
-    },
-    "permission_config": {
-        "title": "权限配置",
-        "description": "【请前往侧边栏-万象画卷界面进行配置】",
-        "type": "object",
-        "default": {}
-    },
-    "persona_config": {
-        "title": "人设配置",
-        "description": "【请前往侧边栏-万象画卷界面进行配置】",
-        "type": "object",
-        "default": {}
-    },
-    "router_config": {
-        "title": "调度配置",
-        "description": "【请前往侧边栏-万象画卷界面进行配置】",
-        "type": "object",
-        "default": {}
-    },
-    "optimizer_config": {
-        "title": "副脑配置",
-        "description": "【请前往侧边栏-万象画卷界面进行配置】",
-        "type": "object",
-        "default": {}
-    },
-    "providers": {
-        "title": "图像节点",
-        "description": "【请前往侧边栏-万象画卷界面进行配置】",
-        "type": "list",
-        "items": {
-            "type": "object"
-        },
-        "default": []
-    },
-    "video_providers": {
-        "title": "视频节点",
-        "description": "【请前往侧边栏-万象画卷界面进行配置】",
-        "type": "list",
-        "items": {
-            "type": "object"
-        },
-        "default": []
-    },
-    "presets": {
-        "title": "极速宏",
-        "description": "【请前往侧边栏-万象画卷界面进行配置】",
-        "type": "list",
-        "items": {
-            "type": "string"
-        },
-        "default": []
+    "notice": {
+        "title": "温馨提示",
+        "description": "【万象画卷】高级配置已迁移。请单机「万象画卷」插件卡片，前往 settings 页面进行可视化配置。",
+        "type": "text",
+        "default": "请前往 Pages 页面进行配置"
     }
 }

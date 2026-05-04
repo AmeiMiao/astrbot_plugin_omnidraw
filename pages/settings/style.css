@@ -1,4 +1,132 @@
 :root {
+    --bg-base: #0b0f19;
+    --panel-bg: rgba(16, 22, 35, 0.6);
+    --surface: rgba(22, 30, 48, 0.8);
+    --text-primary: #e2e8f0;
+    --text-secondary: #64748b;
+    --neon-blue: #00f0ff;
+    --neon-blue-dim: rgba(0, 240, 255, 0.2);
+    --neon-purple: #bd00ff;
+    --danger: #ff003c;
+    --success: #00ff88;
+    --border-color: rgba(0, 240, 255, 0.15);
+    --input-bg: rgba(0, 0, 0, 0.4);
+    --shadow-neon: 0 0 15px rgba(0, 240, 255, 0.1), inset 0 0 20px rgba(0, 240, 255, 0.05);
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'JetBrains Mono', 'Segoe UI', monospace, sans-serif; background: var(--bg-base); color: var(--text-primary); overflow: hidden; }
+
+/* 🌟 动态赛博网格与流光背景 */
+.cyber-grid { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-image: linear-gradient(var(--border-color) 1px, transparent 1px), linear-gradient(90deg, var(--border-color) 1px, transparent 1px); background-size: 40px 40px; opacity: 0.1; z-index: -2; pointer-events: none; animation: gridMove 20s linear infinite; }
+.glow-orb { position: fixed; width: 400px; height: 400px; border-radius: 50%; filter: blur(100px); z-index: -1; pointer-events: none; opacity: 0.4; }
+.orb-1 { top: -100px; left: -100px; background: var(--neon-blue); animation: float 10s ease-in-out infinite; }
+.orb-2 { bottom: -100px; right: -100px; background: var(--neon-purple); animation: float 12s ease-in-out infinite reverse; }
+
+/* 布局体系 */
+.layout-wrapper { display: flex; height: 100vh; }
+.glass-panel { background: var(--panel-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--border-color); }
+
+/* 左侧全息侧边栏 */
+.sidebar { width: 280px; display: flex; flex-direction: column; z-index: 10; padding: 30px 20px; border-right: 1px solid rgba(0,240,255,0.3); box-shadow: 5px 0 20px rgba(0,0,0,0.5); }
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+.brand .icon { font-size: 24px; }
+.brand h1 { font-size: 20px; font-weight: 900; letter-spacing: 2px; }
+.glow-text { color: var(--neon-blue); text-shadow: 0 0 10px var(--neon-blue-dim); }
+.version-badge { font-size: 10px; color: var(--neon-purple); border: 1px solid var(--neon-purple); padding: 2px 8px; border-radius: 2px; letter-spacing: 1px; display: inline-block; margin-bottom: 30px; box-shadow: 0 0 5px rgba(189,0,255,0.3); }
+
+.nav-menu { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.nav-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); font-size: 13px; letter-spacing: 1px; cursor: pointer; transition: var(--transition); text-align: left; position: relative; overflow: hidden; }
+.nav-item::before { content: ''; position: absolute; left: 0; top: 0; height: 100%; width: 3px; background: var(--neon-blue); transform: scaleY(0); transition: var(--transition); }
+.nav-item:hover { color: var(--text-primary); background: rgba(0,240,255,0.05); }
+.nav-item.active { color: var(--neon-blue); background: var(--neon-blue-dim); border-color: rgba(0,240,255,0.2); }
+.nav-item.active::before { transform: scaleY(1); box-shadow: 0 0 10px var(--neon-blue); }
+
+.save-panel { margin-top: auto; }
+.btn-cyber { width: 100%; padding: 16px; font-family: inherit; font-size: 13px; font-weight: bold; letter-spacing: 1px; background: rgba(0,240,255,0.1); border: 1px solid var(--neon-blue); color: var(--neon-blue); cursor: pointer; transition: var(--transition); text-transform: uppercase; position: relative; overflow: hidden; box-shadow: inset 0 0 10px rgba(0,240,255,0.2); }
+.btn-cyber:hover { background: var(--neon-blue); color: #000; box-shadow: 0 0 20px var(--neon-blue); }
+
+/* 主内容区 & Tab 切换逻辑 */
+.content { flex: 1; overflow-y: auto; padding: 40px 60px; scroll-behavior: smooth; }
+.tab-pane { display: none; opacity: 0; transform: translateY(10px); transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); }
+.tab-pane.active { display: block; opacity: 1; transform: translateY(0); }
+
+.page-header { margin-bottom: 40px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 20px; }
+.page-header h2 { font-size: 24px; font-weight: 800; letter-spacing: 2px; margin-bottom: 5px; }
+.cyber-sub { color: var(--text-secondary); font-size: 12px; letter-spacing: 1px; }
+
+/* 赛博卡片 */
+.card { border-radius: var(--radius-md); padding: 30px; margin-bottom: 30px; box-shadow: var(--shadow-neon); position: relative; }
+.card::before { content: ''; position: absolute; top: -1px; left: -1px; width: 20px; height: 20px; border-top: 2px solid var(--neon-blue); border-left: 2px solid var(--neon-blue); }
+.card::after { content: ''; position: absolute; bottom: -1px; right: -1px; width: 20px; height: 20px; border-bottom: 2px solid var(--neon-blue); border-right: 2px solid var(--neon-blue); }
+.highlight-cyber { border-top: 2px solid var(--neon-purple); box-shadow: inset 0 0 20px rgba(189,0,255,0.1); }
+.card-header { margin-bottom: 25px; display: flex; align-items: center; gap: 12px; }
+.card-header.space-between { justify-content: space-between; }
+.cyber-title { font-size: 14px; font-weight: bold; color: var(--text-primary); letter-spacing: 2px; }
+
+.grid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+.grid-2-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.full-width { grid-column: 1 / -1; }
+
+/* 科幻表单 */
+.form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+label { font-size: 11px; font-weight: bold; color: var(--text-secondary); letter-spacing: 1px; }
+.input-cyber { width: 100%; padding: 12px 16px; background: var(--input-bg); border: 1px solid rgba(255,255,255,0.1); color: var(--neon-blue); font-size: 13px; font-family: inherit; transition: var(--transition); border-radius: 2px; }
+.input-cyber:focus { background: rgba(0,0,0,0.8); border-color: var(--neon-blue); box-shadow: inset 0 0 10px rgba(0,240,255,0.2); outline: none; color: #fff; }
+.input-cyber::placeholder { color: rgba(255,255,255,0.2); }
+textarea.input-cyber { resize: vertical; line-height: 1.5; }
+.divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(0,240,255,0.5), transparent); margin: 30px 0; }
+
+/* 按钮与组件 */
+.btn-cyber-outline { background: transparent; border: 1px solid var(--neon-blue); color: var(--neon-blue); cursor: pointer; transition: var(--transition); font-family: inherit; letter-spacing: 1px; }
+.btn-cyber-outline:hover { background: var(--neon-blue); color: #000; box-shadow: 0 0 15px var(--neon-blue); }
+.btn-danger { background: rgba(255,0,60,0.1); border: 1px solid var(--danger); color: var(--danger); cursor: pointer; font-family: inherit; }
+.btn-danger:hover { background: var(--danger); color: #fff; box-shadow: 0 0 15px var(--danger); }
+.btn-small { padding: 6px 12px; font-size: 11px; font-weight: bold; }
+.btn-text-danger { background: transparent; color: var(--danger); font-size: 11px; font-weight: bold; border: none; cursor: pointer; }
+.btn-text-danger:hover { text-shadow: 0 0 5px var(--danger); }
+.btn-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; }
+
+/* HUD Toggle 开关 */
+.toggle-switch { position: relative; display: inline-block; width: 44px; height: 16px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.cyber-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); transition: .3s; }
+.cyber-slider:before { position: absolute; content: ""; height: 14px; width: 20px; left: 0px; bottom: 0px; background: var(--text-secondary); transition: .3s; }
+input:checked + .cyber-slider { background: rgba(0,240,255,0.2); border-color: var(--neon-blue); }
+input:checked + .cyber-slider:before { transform: translateX(22px); background: var(--neon-blue); box-shadow: 0 0 10px var(--neon-blue); }
+
+/* 嵌套层级卡片 */
+.list-container { display: flex; flex-direction: column; gap: 20px; }
+.list-card { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); padding: 25px; position: relative; transition: var(--transition); border-left: 3px solid var(--neon-blue); }
+.list-card:hover { border-color: rgba(0,240,255,0.4); background: rgba(0,240,255,0.02); }
+.list-card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 15px; margin-bottom: 20px; }
+.node-badge { background: var(--neon-blue); color: #000; padding: 2px 8px; font-size: 10px; font-weight: 900; letter-spacing: 1px; }
+.video-badge { background: var(--neon-purple); }
+.inline-input { width: 200px !important; margin-left: 12px; border-bottom: 1px solid var(--neon-blue) !important; border-top: none; border-left: none; border-right: none; background: transparent !important; }
+
+.list-item { display: flex; align-items: center; gap: 12px; padding: 10px 15px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); }
+.list-item:hover { border-color: var(--neon-blue); }
+.preset-name { width: 150px !important; }
+.preset-prompt { flex: 1; }
+.colon { color: var(--neon-blue); font-weight: bold; }
+.empty-tip { text-align: center; color: rgba(255,255,255,0.3); font-size: 12px; padding: 30px; letter-spacing: 2px; }
+
+/* HUD Toast 弹窗 */
+#toast-container { position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: column; gap: 12px; z-index: 9999; }
+.toast { background: rgba(10, 15, 25, 0.95); border: 1px solid var(--neon-blue); padding: 15px 20px; box-shadow: 0 0 20px rgba(0,240,255,0.2); display: flex; align-items: center; gap: 12px; font-size: 12px; letter-spacing: 1px; color: var(--neon-blue); animation: slideIn 0.3s forwards; }
+.toast-error { border-color: var(--danger); color: var(--danger); box-shadow: 0 0 20px rgba(255,0,60,0.2); }
+.toast-fadeout { opacity: 0; transform: translateX(50px); transition: all 0.3s; }
+
+/* 动画 */
+@keyframes slideIn { from { opacity: 0; transform: translateX(50px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes gridMove { 0% { transform: translateY(0); } 100% { transform: translateY(40px); } }
+@keyframes float { 0% { transform: translate(0, 0); } 50% { transform: translate(30px, 50px); } 100% { transform: translate(0, 0); } }
+.animate-spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }:root {
     --bg-base: #F8FAFC;
     --sidebar-bg: rgba(255, 255, 255, 0.85);
     --surface: #FFFFFF;

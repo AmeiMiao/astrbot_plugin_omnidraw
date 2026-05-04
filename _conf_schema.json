@@ -13,11 +13,13 @@
     },
     "default": {}
   },
-  "verbose_report": {
-      "title": "详细汇报模式 (Verbose)",
-      "description": "开启后，画图前会输出最终提取的提示词、透传参数量和参考图识别数，供排查时使用。",
-      "type": "bool",
-      "default": false
+  {
+    "verbose_report": {
+        "title": "详细汇报模式 (Verbose)",
+        "description": "开启后，画图前会输出最终提取的提示词、透传参数量和参考图识别数，供排查时使用。",
+        "type": "bool",
+        "default": false
+    }
   },
   "persona_config": {
     "type": "object",

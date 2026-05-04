@@ -29,8 +29,9 @@ class PluginConfig:
     max_batch_count: int      
     persona_name: str
     persona_base_prompt: str
-    # 🔴 强制恢复为单数：完美兼容你的 persona_manager
-    persona_ref_image: List[str]   
+    # 🔴 [神级修复]：同时保留单复数两个字段，单数糊弄底层旧代码，复数供 main.py 新代码用
+    persona_ref_image: str          
+    persona_ref_images: List[str]   
     allowed_users: List[str]
     optimizer_style: str
     optimizer_custom_prompt: str
@@ -83,7 +84,6 @@ class PluginConfig:
         router_conf = config_dict.get("router_config", {})
         perm_conf = config_dict.get("permission_config", {})
 
-        # 🔴 强制硬编码路径：写入 data\plugin_data\astrbot_plugin_omnidraw\persona_refs
         raw_images = persona_conf.get("persona_ref_image", [])
         if not isinstance(raw_images, list):
             raw_images = [raw_images] if raw_images else []
@@ -132,7 +132,11 @@ class PluginConfig:
             max_batch_count=int(opt_conf.get("max_batch_count", 0)),
             persona_name=str(persona_conf.get("persona_name", "默认助理")),
             persona_base_prompt=str(persona_conf.get("persona_base_prompt", "")),
-            persona_ref_image=processed_images, # 🔴 撤回单数，修复报错
+            
+            # 🔴 分发数据：底层要单字符串，我们给它第一张图；自己用复数列表
+            persona_ref_image=processed_images[0] if processed_images else "",  
+            persona_ref_images=processed_images, 
+            
             allowed_users=[u.strip() for u in str(perm_conf.get("allowed_users", "")).split(",") if u.strip()],
             optimizer_style=str(opt_conf.get("optimizer_style", "手机日常原生感")),
             optimizer_custom_prompt=str(opt_conf.get("optimizer_custom_prompt", "")),

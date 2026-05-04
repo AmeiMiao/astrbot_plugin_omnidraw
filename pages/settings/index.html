@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8" />
-    <title>万象画卷 - 偏好设置</title>
+    <title>Omni-Draw Station</title>
     <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -10,160 +10,116 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="brand">
-                    <span class="brand-icon">✨</span>
-                    <h1>万象画卷</h1>
+                    <span class="brand-icon">💠</span>
+                    <h1>OMNI-DRAW</h1>
                 </div>
-                <span class="version-badge">Version 3.1 Pro</span>
+                <div class="status-dot">SYSTEM_ONLINE</div>
             </div>
             
             <nav class="nav-menu">
-                <button class="nav-item active" data-target="tab-basic">
-                    <span class="nav-icon">⚙️</span> 基础与人设
-                </button>
-                <button class="nav-item" data-target="tab-optimizer">
-                    <span class="nav-icon">🧠</span> 副脑与预设
-                </button>
-                <button class="nav-item" data-target="tab-nodes">
-                    <span class="nav-icon">🔌</span> API 节点
-                </button>
+                <div class="nav-label">GATEWAY</div>
+                <button class="nav-item active" data-target="tab-basic"><span>🛡️</span> 访问权限</button>
+                <div class="nav-label">CREATIVE</div>
+                <button class="nav-item" data-target="tab-persona"><span>🎭</span> 人设档案</button>
+                <button class="nav-item" data-target="tab-hub"><span>🔗</span> 生成调度</button>
+                <div class="nav-label">INTELLIGENCE</div>
+                <button class="nav-item" data-target="tab-optimizer"><span>🧠</span> 副脑引擎</button>
+                <button class="nav-item" data-target="tab-presets"><span>✨</span> 极速宏预设</button>
+                <div class="nav-label">INFRASTRUCTURE</div>
+                <button class="nav-item" data-target="tab-nodes"><span>🔌</span> 算力集群</button>
             </nav>
 
             <div class="save-panel">
-                <button data-action="save-config" class="btn-primary ripple">
-                    保存更改
-                </button>
+                <button data-action="save-config" class="btn-primary">DEPLOY_CHANGES // 部署保存</button>
             </div>
         </aside>
 
         <main class="content">
             <div id="tab-basic" class="tab-pane active">
-                <div class="page-header">
-                    <h2>基础配置</h2>
-                    <p>管理使用权限、指令路由及 AI 助理的默认人设。</p>
-                </div>
-                
+                <div class="page-header"><h2>安全与权限 // GATEWAY</h2><p>管控谁可以调用本算力站生成内容。</p></div>
+                <section class="card">
+                    <div class="form-group">
+                        <label>ALLOWED_USER_IDS [ 许可白名单 ]</label>
+                        <input type="text" id="perm_allowed_users" class="input-modern" placeholder="输入QQ号，逗号分隔。留空则全域开放。" />
+                    </div>
+                </section>
+            </div>
+
+            <div id="tab-persona" class="tab-pane">
+                <div class="page-header"><h2>人设档案 // DNA_PROFILES</h2><p>定义 AI 在进行拟态自拍时的外貌特征与识别特征。</p></div>
                 <div class="grid-row">
                     <section class="card">
-                        <div class="card-header"><h3>🛡️ 访问与路由</h3></div>
-                        <div class="card-body">
-                            <div class="form-group">
-                                <label>许可 QQ 号 (逗号分隔，留空则全员开放)</label>
-                                <input type="text" id="perm_allowed_users" class="input-modern" placeholder="例: 12345,67890" />
-                            </div>
-                            <div class="divider"></div>
-                            <div class="form-group">
-                                <label>图生图节点指向 (chain_text2img)</label>
-                                <input type="text" id="route_img" class="input-modern" />
-                            </div>
-                            <div class="form-group">
-                                <label>自拍节点指向 (chain_selfie)</label>
-                                <input type="text" id="route_selfie" class="input-modern" />
-                            </div>
-                            <div class="form-group">
-                                <label>视频节点指向 (chain_video)</label>
-                                <input type="text" id="route_video" class="input-modern" />
-                            </div>
-                        </div>
+                        <div class="form-group"><label>ENTITY_NAME [ 实体代号 ]</label><input type="text" id="persona_name" class="input-modern" /></div>
+                        <div class="form-group"><label>BASE_PROMPT [ 底层基因序列 ]</label><textarea id="persona_prompt" rows="5" class="input-modern"></textarea></div>
                     </section>
-
                     <section class="card">
-                        <div class="card-header"><h3>🎭 人设外观档案</h3></div>
-                        <div class="card-body">
-                            <div class="form-group">
-                                <label>助理称呼</label>
-                                <input type="text" id="persona_name" class="input-modern" placeholder="默认助理" />
-                            </div>
-                            <div class="form-group">
-                                <label>基底特征提示词 (Base Prompt)</label>
-                                <textarea id="persona_prompt" rows="3" class="input-modern" placeholder="描述外貌特征..."></textarea>
-                            </div>
-                            <div class="form-group">
-                                <label>参考图 (绝对路径 或 URL)</label>
-                                <input type="text" id="persona_ref" class="input-modern" placeholder="https://..." />
+                        <div class="form-group">
+                            <label>REFERENCE_IMAGE [ 形象参考锚点 ]</label>
+                            <div class="upload-area" id="persona-upload-trigger">
+                                <div id="persona-preview" class="image-preview-box">无预览</div>
+                                <div class="upload-hint">点击上传参考图</div>
+                                <input type="hidden" id="persona_ref" />
                             </div>
                         </div>
                     </section>
                 </div>
             </div>
 
-            <div id="tab-optimizer" class="tab-pane">
-                <div class="page-header">
-                    <h2>副脑引擎 & 预设库</h2>
-                    <p>配置大语言模型作为提示词扩写中枢，并管理快捷指令。</p>
-                </div>
-
-                <section class="card highlight-card">
-                    <div class="card-header space-between">
-                        <h3>🧠 Prompt Optimizer</h3>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="opt_enable">
-                            <span class="slider"></span>
-                        </label>
+            <div id="tab-hub" class="tab-pane">
+                <div class="page-header"><h2>生成调度 // ROUTER_HUB</h2><p>将不同的生成指令动态指向已激活的算力节点。</p></div>
+                <section class="card">
+                    <div class="form-group">
+                        <label>IMAGE_LINK [ 图生图负载指向 ]</label>
+                        <div class="node-selector" id="sel-route-img"></div>
+                        <input type="hidden" id="route_img" />
                     </div>
-                    <div class="card-body grid-2-col">
-                        <div class="form-group">
-                            <label>副脑预设画风</label>
-                            <select id="opt_style" class="input-modern select-modern">
-                                <option value="手机日常原生感">手机日常原生感</option>
-                                <option value="自拍专用极致真实">自拍专用极致真实</option>
-                                <option value="电影级光影大片">电影级光影大片</option>
-                                <option value="日系插画大师">日系插画大师</option>
-                                <option value="3D 潮玩盲盒">3D 潮玩盲盒</option>
-                                <option value="自定义模式">自定义模式</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>处理节点</label>
-                            <input type="text" id="opt_chain" class="input-modern" />
-                        </div>
-                        <div class="form-group">
-                            <label>核心模型 (推荐 gpt-4o-mini)</label>
-                            <input type="text" id="opt_model" class="input-modern" />
-                        </div>
-                        <div class="form-group">
-                            <label>单次请求超时 (秒)</label>
-                            <input type="number" id="opt_timeout" class="input-modern" />
-                        </div>
-                        <div class="form-group full-width">
-                            <label>并发生成上限 (0 为无限制)</label>
-                            <input type="number" id="opt_batch" class="input-modern" />
-                        </div>
-                        <div class="form-group full-width">
-                            <label>自定义神经注入 (仅选择“自定义模式”时生效)</label>
-                            <textarea id="opt_custom" rows="2" class="input-modern" placeholder="补充特定的画面要求..."></textarea>
-                        </div>
+                    <div class="divider"></div>
+                    <div class="form-group">
+                        <label>SELFIE_LINK [ 自拍拟态指向 ]</label>
+                        <div class="node-selector" id="sel-route-selfie"></div>
+                        <input type="hidden" id="route_selfie" />
+                    </div>
+                    <div class="divider"></div>
+                    <div class="form-group">
+                        <label>VIDEO_LINK [ 视频渲染指向 ]</label>
+                        <div class="node-selector-video" id="sel-route-video"></div>
+                        <input type="hidden" id="route_video" />
                     </div>
                 </section>
+            </div>
 
-                <section class="card">
-                    <div class="card-header space-between">
-                        <h3>✨ 快捷预设指令</h3>
-                        <button data-action="add-preset" class="btn-secondary btn-small">添加预设</button>
+            <div id="tab-optimizer" class="tab-pane">
+                <div class="page-header"><h2>副脑引擎 // NEURAL_NET</h2><p>大模型提示词重构中枢。</p></div>
+                <section class="card highlight-card">
+                    <div class="card-header"><h3>OPTIMIZER_CORE</h3><label class="toggle-switch"><input type="checkbox" id="opt_enable"><span class="slider"></span></label></div>
+                    <div class="grid-2-col">
+                        <div class="form-group"><label>AESTHETIC [ 画风协议 ]</label><select id="opt_style" class="input-modern"><option value="手机日常原生感">手机日常原生感</option><option value="自拍专用极致真实">自拍专用极致真实</option><option value="电影级光影大片">电影级光影大片</option><option value="日系插画大师">日系插画大师</option><option value="3D 潮玩盲盒">3D 潮玩盲盒</option><option value="自定义模式">自定义模式</option></select></div>
+                        <div class="form-group"><label>OPTIMIZE_NODE [ 处理节点 ]</label><div class="node-selector" id="sel-opt-chain"></div><input type="hidden" id="opt_chain" /></div>
+                        <div class="form-group"><label>CORE_MODEL [ 模型核心 ]</label><input type="text" id="opt_model" class="input-modern" /></div>
+                        <div class="form-group"><label>TIMEOUT [ 超时限制 ]</label><input type="number" id="opt_timeout" class="input-modern" /></div>
+                        <div class="form-group full-width"><label>BATCH_LIMIT [ 并发上限 ]</label><input type="number" id="opt_batch" class="input-modern" /></div>
+                        <div class="form-group full-width"><label>INJECT_CODE [ 自定义注入 ]</label><textarea id="opt_custom" rows="2" class="input-modern"></textarea></div>
                     </div>
-                    <div class="card-body list-container" id="presets-container"></div>
+                </section>
+            </div>
+
+            <div id="tab-presets" class="tab-pane">
+                <div class="page-header"><h2>极速宏预设 // MACRO_LIBRARY</h2><p>管理快速映射指令。</p></div>
+                <section class="card">
+                    <div class="card-header space-between"><h3>ACTIVE_MACROS</h3><button data-action="add-preset" class="btn-secondary btn-small">+ ADD</button></div>
+                    <div class="list-container" id="presets-container"></div>
                 </section>
             </div>
 
             <div id="tab-nodes" class="tab-pane">
-                <div class="page-header">
-                    <h2>API 节点</h2>
-                    <p>管理底层调用的绘图与视频大模型接口配置。</p>
-                </div>
-
+                <div class="page-header"><h2>算力集群 // INFRA_CLUSTERS</h2><p>管理底层 API 服务商。</p></div>
                 <section class="card">
-                    <div class="card-header space-between">
-                        <h3>🎨 生图服务节点</h3>
-                        <button data-action="add-provider" class="btn-secondary btn-small">添加节点</button>
-                    </div>
-                    <div class="card-body list-container" id="providers-container"></div>
+                    <div class="card-header space-between"><h3>IMAGE_NODES</h3><button data-action="add-provider" class="btn-secondary btn-small">+ ADD_IMAGE</button></div>
+                    <div class="list-container" id="providers-container"></div>
                 </section>
-
                 <section class="card">
-                    <div class="card-header space-between">
-                        <h3>🎬 视频服务节点</h3>
-                        <button data-action="add-video-provider" class="btn-secondary btn-small">添加节点</button>
-                    </div>
-                    <div class="card-body list-container" id="video-providers-container"></div>
+                    <div class="card-header space-between"><h3>VIDEO_NODES</h3><button data-action="add-video-provider" class="btn-secondary btn-small">+ ADD_VIDEO</button></div>
+                    <div class="list-container" id="video-providers-container"></div>
                 </section>
             </div>
         </main>

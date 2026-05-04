@@ -52,7 +52,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <label style="margin-bottom: 4px; display: block; color: var(--text-main); font-size: 13px;">详细汇报模式 (Verbose)</label>
-                            <span style="font-size: 11px; color: var(--text-muted);">开启后输出最终提示词和参考图识别信息。</span>
+                            <span style="font-size: 11px; color: var(--text-muted);">开启后输出提示词与参考图识别详情。</span>
                         </div>
                         <div class="switch-wrapper"><input type="checkbox" id="verbose_report" class="ios-switch"></div>
                     </div>
@@ -64,11 +64,11 @@
                 <div class="grid-row">
                     <section class="card glass-card">
                         <div class="form-group"><label>实体代号</label><input type="text" id="persona_name" class="input-glass" /></div>
-                        <div class="form-group"><label>特征描述</label><textarea id="persona_prompt" rows="5" class="input-glass"></textarea></div>
+                        <div class="form-group"><label>底层特征序列 (Base Prompt)</label><textarea id="persona_prompt" rows="5" class="input-glass"></textarea></div>
                     </section>
                     <section class="card glass-card">
                         <div class="form-group">
-                            <label>参考图矩阵</label>
+                            <label>多模态参考图矩阵</label>
                             <div class="multi-upload-container" id="persona-upload-container">
                                 <div class="upload-trigger glass-trigger" id="persona-upload-trigger">
                                     <span class="upload-icon">+</span>
@@ -102,6 +102,7 @@
                         <div class="form-group"><label>模型核心</label><input type="text" id="opt_model" class="input-glass" /></div>
                         <div class="form-group"><label>超时(秒)</label><input type="number" id="opt_timeout" class="input-glass" /></div>
                         <div class="form-group full-width"><label>并发上限</label><input type="number" id="opt_batch" class="input-glass" /></div>
+                        <div class="form-group full-width"><label>自定义注入要求</label><textarea id="opt_custom" rows="2" class="input-glass"></textarea></div>
                     </div>
                 </section>
             </div>
@@ -117,11 +118,11 @@
             <div id="tab-nodes" class="tab-pane">
                 <div class="page-header"><h2>算力集群</h2></div>
                 <section class="card glass-card">
-                    <div class="card-header space-between"><h3>图像节点</h3><button data-action="add-provider" class="btn-glass-secondary btn-small">+ 添加节点</button></div>
+                    <div class="card-header space-between"><h3>图像节点</h3><button data-action="add-provider" class="btn-glass-secondary btn-small">+ 添加生图节点</button></div>
                     <div class="list-container" id="providers-container"></div>
                 </section>
                 <section class="card glass-card">
-                    <div class="card-header space-between"><h3>视频节点</h3><button data-action="add-video-provider" class="btn-glass-secondary btn-small">+ 添加视频</button></div>
+                    <div class="card-header space-between"><h3>视频节点</h3><button data-action="add-video-provider" class="btn-glass-secondary btn-small">+ 添加视频节点</button></div>
                     <div class="list-container" id="video-providers-container"></div>
                 </section>
             </div>

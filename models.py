@@ -1,11 +1,8 @@
 """
 AstrBot 万象画卷插件 v3.1 - 数据模型
 采用极简安全循环，完美兼容全新的中文 UI 标签与历史遗留英文标签。
-支持多模态参考图数组，并内置 Base64 物理落地引擎。
 """
 import os
-import base64
-import uuid
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
@@ -31,11 +28,12 @@ class PluginConfig:
     max_batch_count: int      
     persona_name: str
     persona_base_prompt: str
-    persona_ref_image: str          # 兼容旧版的单图字符串
-    persona_ref_images: List[str]   # 真实使用的多图数组
+    persona_ref_image: str          
+    persona_ref_images: List[str]   
     allowed_users: List[str]
     optimizer_style: str
     optimizer_custom_prompt: str
+    verbose_report: bool            # 💡 新增：详细汇报开关
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any], data_dir: str) -> "PluginConfig":
@@ -86,9 +84,6 @@ class PluginConfig:
         router_conf = config_dict.get("router_config", {})
         perm_conf = config_dict.get("permission_config", {})
 
-        # ==========================================
-        # 🚀 核心修复：Base64 物理落地引擎
-        # ==========================================
         raw_images = persona_conf.get("persona_ref_image", [])
         if isinstance(raw_images, str):
             raw_images = [raw_images] if raw_images.strip() else []
@@ -96,9 +91,6 @@ class PluginConfig:
             raw_images = []
 
         processed_ref_paths = []
-        save_dir = os.path.abspath(os.path.join(data_dir, "persona_refs"))
-        os.makedirs(save_dir, exist_ok=True)
-
         for img_path in raw_images:
             if isinstance(img_path, dict):
                 img_path = img_path.get("path") or img_path.get("url") or img_path.get("file") or ""
@@ -106,27 +98,7 @@ class PluginConfig:
                 continue
                 
             img_path = img_path.strip()
-            
-            # 💡 拦截 Base64 并将其保存为本地实体图片
-            if img_path.startswith("data:image"):
-                try:
-                    header, b64_data = img_path.split(",", 1)
-                    ext = "png"
-                    if "jpeg" in header or "jpg" in header: ext = "jpg"
-                    elif "webp" in header: ext = "webp"
-                    
-                    file_name = f"ref_{uuid.uuid4().hex[:8]}.{ext}"
-                    file_path = os.path.join(save_dir, file_name)
-                    
-                    with open(file_path, "wb") as f:
-                        f.write(base64.b64decode(b64_data))
-                        
-                    processed_ref_paths.append(file_path) # 将物理绝对路径传给核心组件
-                except Exception as e:
-                    print(f"[万象画卷] 图片 Base64 解码保存失败: {e}")
-            
-            # 如果已经是网络图片或绝对路径，直接保留
-            elif img_path.startswith("http") or os.path.isabs(img_path):
+            if img_path.startswith("data:image") or img_path.startswith("http") or os.path.isabs(img_path):
                 processed_ref_paths.append(img_path)
             else:
                 target_path = os.path.abspath(os.path.join(data_dir, img_path))
@@ -163,7 +135,8 @@ class PluginConfig:
             persona_ref_images=processed_ref_paths, 
             allowed_users=allowed_users,
             optimizer_style=str(opt_conf.get("optimizer_style", "手机日常原生感")),
-            optimizer_custom_prompt=str(opt_conf.get("optimizer_custom_prompt", ""))
+            optimizer_custom_prompt=str(opt_conf.get("optimizer_custom_prompt", "")),
+            verbose_report=bool(config_dict.get("verbose_report", False)) # 💡 解析详细汇报开关
         )
 
     def get_provider(self, provider_id: str) -> Optional[ProviderConfig]:

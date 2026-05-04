@@ -1,156 +1,50 @@
 {
-  "permission_config": {
-    "type": "object",
-    "description": "🛡️ 权限控制",
-    "hint": "管理谁可以使用本插件的生图和视频功能",
-    "items": {
-      "allowed_users": {
-        "type": "string",
-        "description": "允许使用的QQ号",
-        "hint": "多个用英文逗号隔开。留空则默认全员可用。",
-        "default": ""
-      }
-    },
-    "default": {}
-  },
-  {
     "verbose_report": {
         "title": "详细汇报模式 (Verbose)",
-        "description": "开启后，画图前会输出最终提取的提示词、透传参数量和参考图识别数，供排查时使用。",
+        "description": "【请前往settings中进行配置】开启后输出详细调试信息。",
         "type": "bool",
         "default": false
+    },
+    "permission_config": {
+        "title": "权限与白名单配置",
+        "description": "【请前往settings中进行配置】",
+        "type": "object",
+        "default": {}
+    },
+    "persona_config": {
+        "title": "人设档案配置",
+        "description": "【请前往settings中进行配置】",
+        "type": "object",
+        "default": {}
+    },
+    "router_config": {
+        "title": "生成调度配置",
+        "description": "【请前往settings中进行配置】",
+        "type": "object",
+        "default": {}
+    },
+    "optimizer_config": {
+        "title": "副脑引擎配置",
+        "description": "【请前往settings中进行配置】",
+        "type": "object",
+        "default": {}
+    },
+    "providers": {
+        "title": "图像算力节点集群",
+        "description": "【请前往settings中进行配置】",
+        "type": "list",
+        "default": []
+    },
+    "video_providers": {
+        "title": "视频渲染节点集群",
+        "description": "【请前往settings中进行配置】",
+        "type": "list",
+        "default": []
+    },
+    "presets": {
+        "title": "极速宏预设",
+        "description": "【请前往settings中进行配置】",
+        "type": "list",
+        "default": []
     }
-  },
-  "persona_config": {
-    "type": "object",
-    "description": "🎭 人设定制",
-    "hint": "定义 AI 助理在使用 /自拍 时的专属固定形象",
-    "items": {
-      "persona_name": { "description": "助理名称", "hint": "如: 默认助理", "type": "string", "default": "默认助理" },
-      "persona_base_prompt": { "description": "外貌特征", "hint": "固定在提示词前方的英文正向特征", "type": "text", "default": "masterpiece, best quality, 1girl" },
-      "persona_ref_image": { "description": "形象参考图", "hint": "直接点击上传人脸/形象参考图", "type": "file", "default": "" }
-    },
-    "default": {}
-  },
-  "optimizer_config": {
-    "type": "object",
-    "description": "🧠 提示词副脑 (Prompt Optimizer)",
-    "hint": "拦截简单指令并自动扩写为高维度英文提示词",
-    "items": {
-      "enable_optimizer": { "type": "bool", "description": "副脑总开关", "hint": "大模型自拍时是否调用副脑？", "default": true },
-      "chain_optimizer": { "description": "执行链路", "hint": "调用哪个节点来扩写提示词", "type": "string", "default": "node_1" },
-      "optimizer_model": { "description": "指定模型", "hint": "推荐极速模型，如 gpt-4o-mini", "type": "string", "default": "gpt-4o-mini" },
-      "optimizer_timeout": { "description": "超时时间 (秒)", "hint": "建议 8~15 秒", "type": "string", "default": "15" },
-      "max_batch_count": { "type": "int", "description": "批量生成数量上限", "hint": "0 表示无上限。防止大模型胡乱调用耗尽余额。", "default": 0 },
-      "optimizer_style": {
-        "type": "string",
-        "description": "✨ 副脑预设画风",
-        "hint": "选择副脑优化的底层框架风格",
-        "options": ["手机日常原生感", "自拍专用极致真实", "电影级光影大片", "日系插画大师", "3D 潮玩盲盒", "自定义模式"],
-        "default": "手机日常原生感"
-      },
-      "optimizer_custom_prompt": {
-        "type": "text",
-        "description": "✍️ 自定义副脑提示词",
-        "hint": "仅在上方选择【自定义模式】时生效。请用大白话输入你期望的光影、画风或镜头要求。",
-        "default": ""
-      }
-    },
-    "default": {}
-  },
-  "router_config": {
-    "type": "object",
-    "description": "🔗 路由调度",
-    "hint": "将不同的指令绑定到具体的 API 节点执行",
-    "items": {
-      "chain_text2img": { "description": "常规画图链路", "hint": "执行 /画 绑定的节点ID", "type": "string", "default": "node_1" },
-      "chain_selfie": { "description": "自拍专用链路", "hint": "执行 /自拍 绑定的节点ID", "type": "string", "default": "node_1" },
-      "chain_video": { "description": "视频生成链路", "hint": "执行 /视频 绑定的视频节点ID", "type": "string", "default": "video_node_1" }
-    },
-    "default": {}
-  },
-  "presets": {
-    "type": "list",
-    "description": "✨ 改图预设提示词",
-    "hint": "格式：预设名:英文提示词。例如：手办化:Transform into figurine style",
-    "default": [
-      "手办化:masterpiece, best quality, 3d anime figure, octane render, blind box toy, chibi, tilt-shift, highly detailed, clean background"
-    ]
-  },
-  "providers": {
-    "description": "🎨 API 生图节点配置",
-    "hint": "支持添加多个 OpenAI 兼容协议的生图节点",
-    "type": "template_list",
-    "items": {
-      "type": "object",
-      "keys": {
-        "节点ID": { "type": "string", "default": "node_1" },
-        "接口模式": { "type": "string", "options": ["openai_image", "openai_chat"], "default": "openai_image" },
-        "接口地址 (需含/v1)": { "type": "string", "default": "https://api.openai.com/v1" },
-        "API密钥": { "type": "text", "default": "" },
-        "模型名称": { "type": "string", "default": "banana" },
-        "超时时间(秒)": { "type": "string", "default": "60" }
-      }
-    },
-    "templates": {
-      "openai_node": {
-        "name": "➕ 添加生图节点",
-        "items": {
-          "节点ID": { "type": "string", "default": "node_1" },
-          "接口模式": { "type": "string", "options": ["openai_image", "openai_chat"], "default": "openai_image" },
-          "接口地址 (需含/v1)": { "type": "string", "default": "https://api.openai.com/v1" },
-          "API密钥": { "type": "text", "default": "sk-xxxxxx" },
-          "模型名称": { "type": "string", "default": "banana" },
-          "超时时间(秒)": { "type": "string", "default": "60" }
-        }
-      }
-    },
-    "default": []
-  },
-  "video_providers": {
-    "description": "🎬 API 视频节点配置",
-    "hint": "支持配置各大主流视频模型接口",
-    "type": "template_list",
-    "items": {
-      "type": "object",
-      "keys": {
-        "节点ID": { "type": "string", "default": "video_node_1" },
-        "接口模式": { 
-            "type": "string", 
-            "options": [
-                "async_task (异步排队轮询/videos/generations)", 
-                "openai_sync (同步阻塞直返)", 
-                "openai_chat (对话伪装视频/chat/completions)"
-            ], 
-            "default": "async_task (异步排队轮询/videos/generations)"
-        },
-        "接口地址 (需含/v1或/v2)": { "type": "string", "default": "https://api.example.com/v1" },
-        "API密钥": { "type": "text", "default": "" },
-        "模型名称": { "type": "string", "default": "kling-v1" },
-        "超时时间(秒)": { "type": "string", "default": "600" }
-      }
-    },
-    "templates": {
-      "video_node": {
-        "name": "➕ 添加视频节点",
-        "items": {
-          "节点ID": { "type": "string", "default": "video_node_1" },
-          "接口模式": { 
-              "type": "string", 
-              "options": [
-                  "async_task (异步排队轮询/videos/generations)", 
-                  "openai_sync (同步阻塞直返)", 
-                  "openai_chat (对话伪装视频/chat/completions)"
-              ], 
-              "default": "async_task (异步排队轮询/videos/generations)" 
-          },
-          "接口地址 (需含/v1或/v2)": { "type": "string", "default": "https://api.example.com/v1" },
-          "API密钥": { "type": "text", "default": "sk-xxxxxx" },
-          "模型名称": { "type": "string", "default": "kling-v1" },
-          "超时时间(秒)": { "type": "string", "default": "600" }
-        }
-      }
-    },
-    "default": []
-  }
 }

@@ -2,109 +2,112 @@
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8" />
-    <title>万象画卷 - 高级控制台</title>
+    <title>万象画卷 - 全息控制台</title>
     <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
+    <div class="cyber-grid"></div>
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+
     <div class="layout-wrapper">
-        <aside class="sidebar fade-in">
+        <aside class="sidebar glass-panel">
             <div class="sidebar-header">
-                <div class="brand">
-                    <span class="icon">🎨</span>
-                    <h1>万象画卷</h1>
+                <div class="brand glow-text">
+                    <span class="icon">🌌</span>
+                    <h1>OMNI-DRAW</h1>
                 </div>
-                <span class="version-badge">v3.1 Pro</span>
+                <div class="version-badge">SYS.v3.1_PRO</div>
             </div>
             
             <nav class="nav-menu">
                 <button class="nav-item active" data-target="tab-basic">
-                    <span class="nav-icon">⚙️</span> 基础与人设
+                    <span class="nav-icon">⎔</span> 核心节点控制
                 </button>
                 <button class="nav-item" data-target="tab-optimizer">
-                    <span class="nav-icon">🧠</span> 副脑与预设
+                    <span class="nav-icon">⌬</span> AI 副脑引擎
                 </button>
                 <button class="nav-item" data-target="tab-nodes">
-                    <span class="nav-icon">🔌</span> API节点管理
+                    <span class="nav-icon">⎈</span> 算力集群管理
                 </button>
             </nav>
 
             <div class="save-panel">
-                <button data-action="save-config" class="btn-primary ripple">
-                    💾 保存所有配置
+                <button data-action="save-config" class="btn-cyber ripple">
+                    <span class="btn-content">INITIALIZE_SAVE // 保存重载</span>
                 </button>
             </div>
         </aside>
 
         <main class="content">
-            
-            <div id="tab-basic" class="tab-pane active fade-in-up">
+            <div id="tab-basic" class="tab-pane active">
                 <div class="page-header">
-                    <h2>基础配置</h2>
-                    <p>管理全局权限、路由指向以及 AI 助理的固定人设参数。</p>
+                    <h2 class="glow-text">SYSTEM.CORE // 核心参数</h2>
+                    <p class="cyber-sub">管控全局权限路由及 AI 视觉实体化参数。</p>
                 </div>
                 
                 <div class="grid-row">
-                    <section class="card">
-                        <div class="card-header"><h3>🛡️ 权限与路由</h3></div>
+                    <section class="card glass-panel">
+                        <div class="card-header"><h3 class="cyber-title">ACCESS_ROUTER // 权限与路由</h3></div>
                         <div class="card-body">
                             <div class="form-group">
-                                <label>允许使用的QQ号 (留空全员可用)</label>
-                                <input type="text" id="perm_allowed_users" class="input-modern" placeholder="例: 123456,888888" />
+                                <label>ALLOWED_ID [许可白名单]</label>
+                                <input type="text" id="perm_allowed_users" class="input-cyber" placeholder="为空即全域开放..." />
                             </div>
                             <div class="divider"></div>
                             <div class="form-group">
-                                <label>🔗 画图指令绑定节点 (chain_text2img)</label>
-                                <input type="text" id="route_img" class="input-modern" />
+                                <label>LINK_IMG [图生图链路]</label>
+                                <input type="text" id="route_img" class="input-cyber" />
                             </div>
                             <div class="form-group">
-                                <label>🔗 自拍指令绑定节点 (chain_selfie)</label>
-                                <input type="text" id="route_selfie" class="input-modern" />
+                                <label>LINK_SELFIE [拟态自拍链路]</label>
+                                <input type="text" id="route_selfie" class="input-cyber" />
                             </div>
                             <div class="form-group">
-                                <label>🔗 视频指令绑定节点 (chain_video)</label>
-                                <input type="text" id="route_video" class="input-modern" />
+                                <label>LINK_VIDEO [序列帧渲染链路]</label>
+                                <input type="text" id="route_video" class="input-cyber" />
                             </div>
                         </div>
                     </section>
 
-                    <section class="card">
-                        <div class="card-header"><h3>🎭 固定人设定制</h3></div>
+                    <section class="card glass-panel">
+                        <div class="card-header"><h3 class="cyber-title">PERSONA_SYNC // 实体化参数</h3></div>
                         <div class="card-body">
                             <div class="form-group">
-                                <label>助理名称</label>
-                                <input type="text" id="persona_name" class="input-modern" placeholder="默认助理" />
+                                <label>ENTITY_NAME [实体代号]</label>
+                                <input type="text" id="persona_name" class="input-cyber" placeholder="系统默认助理" />
                             </div>
                             <div class="form-group">
-                                <label>外貌特征 (Base Prompt)</label>
-                                <textarea id="persona_prompt" rows="3" class="input-modern" placeholder="masterpiece, best quality..."></textarea>
+                                <label>BASE_DNA [底层外貌特征协议]</label>
+                                <textarea id="persona_prompt" rows="3" class="input-cyber" placeholder="masterpiece, best quality..."></textarea>
                             </div>
                             <div class="form-group">
-                                <label>形象参考图 (网络 URL 或 绝对路径)</label>
-                                <input type="text" id="persona_ref" class="input-modern" placeholder="https://..." />
+                                <label>VISUAL_REF [视觉锚点链接]</label>
+                                <input type="text" id="persona_ref" class="input-cyber" placeholder="输入绝对路径或 URL..." />
                             </div>
                         </div>
                     </section>
                 </div>
             </div>
 
-            <div id="tab-optimizer" class="tab-pane fade-in-up">
+            <div id="tab-optimizer" class="tab-pane">
                 <div class="page-header">
-                    <h2>副脑引擎 & 预设库</h2>
-                    <p>配置大语言模型作为提示词“副脑”，以及快捷图生图预设指令。</p>
+                    <h2 class="glow-text">NEURAL_NET // 神经网络 & 预设</h2>
+                    <p class="cyber-sub">调节提示词副脑扩写逻辑与快速魔法宏。</p>
                 </div>
 
-                <section class="card highlight-card">
+                <section class="card glass-panel highlight-cyber">
                     <div class="card-header space-between">
-                        <h3>🧠 Prompt Optimizer 引擎</h3>
+                        <h3 class="cyber-title">SUB_BRAIN_OPTIMIZER // 提示词重构中枢</h3>
                         <label class="toggle-switch">
                             <input type="checkbox" id="opt_enable">
-                            <span class="slider"></span>
+                            <span class="slider cyber-slider"></span>
                         </label>
                     </div>
                     <div class="card-body grid-2-col">
                         <div class="form-group">
-                            <label>✨ 副脑预设画风</label>
-                            <select id="opt_style" class="input-modern">
+                            <label>AESTHETIC_PROTOCOL [画风协议]</label>
+                            <select id="opt_style" class="input-cyber select-cyber">
                                 <option value="手机日常原生感">手机日常原生感</option>
                                 <option value="自拍专用极致真实">自拍专用极致真实</option>
                                 <option value="电影级光影大片">电影级光影大片</option>
@@ -114,55 +117,55 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>执行链路 (节点ID)</label>
-                            <input type="text" id="opt_chain" class="input-modern" />
+                            <label>TARGET_NODE [处理节点]</label>
+                            <input type="text" id="opt_chain" class="input-cyber" />
                         </div>
                         <div class="form-group">
-                            <label>优化模型 (推荐 gpt-4o-mini)</label>
-                            <input type="text" id="opt_model" class="input-modern" />
+                            <label>LLM_CORE [语言模型核心]</label>
+                            <input type="text" id="opt_model" class="input-cyber" />
                         </div>
                         <div class="form-group">
-                            <label>超时时间 (秒)</label>
-                            <input type="number" id="opt_timeout" class="input-modern" />
+                            <label>TIMEOUT_LIMIT [熔断时间]</label>
+                            <input type="number" id="opt_timeout" class="input-cyber" />
                         </div>
                         <div class="form-group full-width">
-                            <label>单次并发批量上限 (0为不限)</label>
-                            <input type="number" id="opt_batch" class="input-modern" />
+                            <label>BATCH_LIMIT [单次并发限制 (0为无限制)]</label>
+                            <input type="number" id="opt_batch" class="input-cyber" />
                         </div>
                         <div class="form-group full-width">
-                            <label>✍️ 自定义注入词 (仅选择【自定义模式】时生效)</label>
-                            <textarea id="opt_custom" rows="2" class="input-modern" placeholder="在此输入自定义画风要求..."></textarea>
+                            <label>CUSTOM_INJECT [自定义神经注入词]</label>
+                            <textarea id="opt_custom" rows="2" class="input-cyber" placeholder="仅自定义模式生效，注入底层描述..."></textarea>
                         </div>
                     </div>
                 </section>
 
-                <section class="card">
+                <section class="card glass-panel">
                     <div class="card-header space-between">
-                        <h3>✨ 快捷改图预设 (Presets)</h3>
-                        <button data-action="add-preset" class="btn-success btn-small ripple">+ 新增预设</button>
+                        <h3 class="cyber-title">MACRO_PRESETS // 快捷魔法宏</h3>
+                        <button data-action="add-preset" class="btn-cyber-outline btn-small ripple">+ ADD_MACRO</button>
                     </div>
                     <div class="card-body list-container" id="presets-container"></div>
                 </section>
             </div>
 
-            <div id="tab-nodes" class="tab-pane fade-in-up">
+            <div id="tab-nodes" class="tab-pane">
                 <div class="page-header">
-                    <h2>API 节点管理</h2>
-                    <p>管理底层的图像与视频生成模型接口，支持无限扩展与负载均衡。</p>
+                    <h2 class="glow-text">CLUSTER_NODES // 算力节点管理</h2>
+                    <p class="cyber-sub">接入并管理底层的图像与视频生成模型接口群。</p>
                 </div>
 
-                <section class="card">
+                <section class="card glass-panel">
                     <div class="card-header space-between">
-                        <h3>🎨 图像生成节点</h3>
-                        <button data-action="add-provider" class="btn-primary btn-small ripple">+ 添加生图节点</button>
+                        <h3 class="cyber-title">IMAGE_GENERATORS // 图像算力池</h3>
+                        <button data-action="add-provider" class="btn-cyber-outline btn-small ripple">+ ADD_NODE</button>
                     </div>
                     <div class="card-body list-container" id="providers-container"></div>
                 </section>
 
-                <section class="card">
+                <section class="card glass-panel">
                     <div class="card-header space-between">
-                        <h3>🎬 视频生成节点</h3>
-                        <button data-action="add-video-provider" class="btn-primary btn-small ripple">+ 添加视频节点</button>
+                        <h3 class="cyber-title">VIDEO_RENDERERS // 视频渲染池</h3>
+                        <button data-action="add-video-provider" class="btn-cyber-outline btn-small ripple">+ ADD_RENDERER</button>
                     </div>
                     <div class="card-body list-container" id="video-providers-container"></div>
                 </section>

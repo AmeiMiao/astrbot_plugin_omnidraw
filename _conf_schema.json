@@ -30,7 +30,7 @@
         "default": {}
     },
     "providers": {
-        "title": "生图节点",
+        "title": "图像节点",
         "description": "【请前往侧边栏-万象画卷界面进行配置】",
         "type": "list",
         "items": {
@@ -48,7 +48,7 @@
         "default": []
     },
     "presets": {
-        "title": "预设宏",
+        "title": "极速宏",
         "description": "【请前往侧边栏-万象画卷界面进行配置】",
         "type": "list",
         "items": {

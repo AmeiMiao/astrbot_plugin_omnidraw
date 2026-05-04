@@ -10,26 +10,26 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="brand">
-                    <div class="brand-icon">✨</div>
+                    <span class="brand-icon">✨</span>
                     <h1>万象画卷</h1>
                 </div>
-                <span class="version-badge">Version 3.1</span>
+                <span class="version-badge">Version 3.1 Pro</span>
             </div>
             
             <nav class="nav-menu">
                 <button class="nav-item active" data-target="tab-basic">
-                    <span class="nav-icon">⚲</span> 基础与人设
+                    <span class="nav-icon">⚙️</span> 基础与人设
                 </button>
                 <button class="nav-item" data-target="tab-optimizer">
-                    <span class="nav-icon">✧</span> 副脑引擎
+                    <span class="nav-icon">🧠</span> 副脑与预设
                 </button>
                 <button class="nav-item" data-target="tab-nodes">
-                    <span class="nav-icon">⌘</span> API 节点
+                    <span class="nav-icon">🔌</span> API 节点
                 </button>
             </nav>
 
             <div class="save-panel">
-                <button data-action="save-config" class="btn-primary">
+                <button data-action="save-config" class="btn-primary ripple">
                     保存更改
                 </button>
             </div>
@@ -88,11 +88,11 @@
 
             <div id="tab-optimizer" class="tab-pane">
                 <div class="page-header">
-                    <h2>副脑引擎</h2>
-                    <p>配置语言模型作为指令扩写中枢，并管理快捷魔法预设。</p>
+                    <h2>副脑引擎 & 预设库</h2>
+                    <p>配置大语言模型作为提示词扩写中枢，并管理快捷指令。</p>
                 </div>
 
-                <section class="card">
+                <section class="card highlight-card">
                     <div class="card-header space-between">
                         <h3>🧠 Prompt Optimizer</h3>
                         <label class="toggle-switch">
@@ -166,186 +166,6 @@
                     <div class="card-body list-container" id="video-providers-container"></div>
                 </section>
             </div>
-
-        </main>
-    </div>
-
-    <div id="toast-container"></div>
-    <script type="module" src="./app.js"></script>
-</body>
-</html><!doctype html>
-<html lang="zh-CN">
-<head>
-    <meta charset="utf-8" />
-    <title>万象画卷 - 全息控制台</title>
-    <link rel="stylesheet" href="./style.css" />
-</head>
-<body>
-    <div class="cyber-grid"></div>
-    <div class="glow-orb orb-1"></div>
-    <div class="glow-orb orb-2"></div>
-
-    <div class="layout-wrapper">
-        <aside class="sidebar glass-panel">
-            <div class="sidebar-header">
-                <div class="brand glow-text">
-                    <span class="icon">🌌</span>
-                    <h1>OMNI-DRAW</h1>
-                </div>
-                <div class="version-badge">SYS.v3.1_PRO</div>
-            </div>
-            
-            <nav class="nav-menu">
-                <button class="nav-item active" data-target="tab-basic">
-                    <span class="nav-icon">⎔</span> 核心节点控制
-                </button>
-                <button class="nav-item" data-target="tab-optimizer">
-                    <span class="nav-icon">⌬</span> AI 副脑引擎
-                </button>
-                <button class="nav-item" data-target="tab-nodes">
-                    <span class="nav-icon">⎈</span> 算力集群管理
-                </button>
-            </nav>
-
-            <div class="save-panel">
-                <button data-action="save-config" class="btn-cyber ripple">
-                    <span class="btn-content">INITIALIZE_SAVE // 保存重载</span>
-                </button>
-            </div>
-        </aside>
-
-        <main class="content">
-            <div id="tab-basic" class="tab-pane active">
-                <div class="page-header">
-                    <h2 class="glow-text">SYSTEM.CORE // 核心参数</h2>
-                    <p class="cyber-sub">管控全局权限路由及 AI 视觉实体化参数。</p>
-                </div>
-                
-                <div class="grid-row">
-                    <section class="card glass-panel">
-                        <div class="card-header"><h3 class="cyber-title">ACCESS_ROUTER // 权限与路由</h3></div>
-                        <div class="card-body">
-                            <div class="form-group">
-                                <label>ALLOWED_ID [许可白名单]</label>
-                                <input type="text" id="perm_allowed_users" class="input-cyber" placeholder="为空即全域开放..." />
-                            </div>
-                            <div class="divider"></div>
-                            <div class="form-group">
-                                <label>LINK_IMG [图生图链路]</label>
-                                <input type="text" id="route_img" class="input-cyber" />
-                            </div>
-                            <div class="form-group">
-                                <label>LINK_SELFIE [拟态自拍链路]</label>
-                                <input type="text" id="route_selfie" class="input-cyber" />
-                            </div>
-                            <div class="form-group">
-                                <label>LINK_VIDEO [序列帧渲染链路]</label>
-                                <input type="text" id="route_video" class="input-cyber" />
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="card glass-panel">
-                        <div class="card-header"><h3 class="cyber-title">PERSONA_SYNC // 实体化参数</h3></div>
-                        <div class="card-body">
-                            <div class="form-group">
-                                <label>ENTITY_NAME [实体代号]</label>
-                                <input type="text" id="persona_name" class="input-cyber" placeholder="系统默认助理" />
-                            </div>
-                            <div class="form-group">
-                                <label>BASE_DNA [底层外貌特征协议]</label>
-                                <textarea id="persona_prompt" rows="3" class="input-cyber" placeholder="masterpiece, best quality..."></textarea>
-                            </div>
-                            <div class="form-group">
-                                <label>VISUAL_REF [视觉锚点链接]</label>
-                                <input type="text" id="persona_ref" class="input-cyber" placeholder="输入绝对路径或 URL..." />
-                            </div>
-                        </div>
-                    </section>
-                </div>
-            </div>
-
-            <div id="tab-optimizer" class="tab-pane">
-                <div class="page-header">
-                    <h2 class="glow-text">NEURAL_NET // 神经网络 & 预设</h2>
-                    <p class="cyber-sub">调节提示词副脑扩写逻辑与快速魔法宏。</p>
-                </div>
-
-                <section class="card glass-panel highlight-cyber">
-                    <div class="card-header space-between">
-                        <h3 class="cyber-title">SUB_BRAIN_OPTIMIZER // 提示词重构中枢</h3>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="opt_enable">
-                            <span class="slider cyber-slider"></span>
-                        </label>
-                    </div>
-                    <div class="card-body grid-2-col">
-                        <div class="form-group">
-                            <label>AESTHETIC_PROTOCOL [画风协议]</label>
-                            <select id="opt_style" class="input-cyber select-cyber">
-                                <option value="手机日常原生感">手机日常原生感</option>
-                                <option value="自拍专用极致真实">自拍专用极致真实</option>
-                                <option value="电影级光影大片">电影级光影大片</option>
-                                <option value="日系插画大师">日系插画大师</option>
-                                <option value="3D 潮玩盲盒">3D 潮玩盲盒</option>
-                                <option value="自定义模式">自定义模式</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>TARGET_NODE [处理节点]</label>
-                            <input type="text" id="opt_chain" class="input-cyber" />
-                        </div>
-                        <div class="form-group">
-                            <label>LLM_CORE [语言模型核心]</label>
-                            <input type="text" id="opt_model" class="input-cyber" />
-                        </div>
-                        <div class="form-group">
-                            <label>TIMEOUT_LIMIT [熔断时间]</label>
-                            <input type="number" id="opt_timeout" class="input-cyber" />
-                        </div>
-                        <div class="form-group full-width">
-                            <label>BATCH_LIMIT [单次并发限制 (0为无限制)]</label>
-                            <input type="number" id="opt_batch" class="input-cyber" />
-                        </div>
-                        <div class="form-group full-width">
-                            <label>CUSTOM_INJECT [自定义神经注入词]</label>
-                            <textarea id="opt_custom" rows="2" class="input-cyber" placeholder="仅自定义模式生效，注入底层描述..."></textarea>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="card glass-panel">
-                    <div class="card-header space-between">
-                        <h3 class="cyber-title">MACRO_PRESETS // 快捷魔法宏</h3>
-                        <button data-action="add-preset" class="btn-cyber-outline btn-small ripple">+ ADD_MACRO</button>
-                    </div>
-                    <div class="card-body list-container" id="presets-container"></div>
-                </section>
-            </div>
-
-            <div id="tab-nodes" class="tab-pane">
-                <div class="page-header">
-                    <h2 class="glow-text">CLUSTER_NODES // 算力节点管理</h2>
-                    <p class="cyber-sub">接入并管理底层的图像与视频生成模型接口群。</p>
-                </div>
-
-                <section class="card glass-panel">
-                    <div class="card-header space-between">
-                        <h3 class="cyber-title">IMAGE_GENERATORS // 图像算力池</h3>
-                        <button data-action="add-provider" class="btn-cyber-outline btn-small ripple">+ ADD_NODE</button>
-                    </div>
-                    <div class="card-body list-container" id="providers-container"></div>
-                </section>
-
-                <section class="card glass-panel">
-                    <div class="card-header space-between">
-                        <h3 class="cyber-title">VIDEO_RENDERERS // 视频渲染池</h3>
-                        <button data-action="add-video-provider" class="btn-cyber-outline btn-small ripple">+ ADD_RENDERER</button>
-                    </div>
-                    <div class="card-body list-container" id="video-providers-container"></div>
-                </section>
-            </div>
-
         </main>
     </div>
 

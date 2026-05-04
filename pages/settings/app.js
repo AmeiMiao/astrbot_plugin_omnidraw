@@ -3,7 +3,7 @@ const bridge = window.AstrBotPluginPage;
 let state = {
     permission_config: { allowed_users: "" },
     persona_config: { persona_name: "", persona_base_prompt: "", persona_ref_image: [] },
-    optimizer_config: { enable_optimizer: true, optimizer_style: "", chain_optimizer: "", optimizer_model: "", optimizer_timeout: 15, max_batch_count: 0 },
+    optimizer_config: { enable_optimizer: true, optimizer_style: "", chain_optimizer: "", optimizer_model: "", optimizer_timeout: 15, max_batch_count: 0, optimizer_custom_prompt: "" },
     router_config: { chain_text2img: "", chain_selfie: "", chain_video: "" },
     presets: [], providers: [], video_providers: [], verbose_report: false
 };
@@ -17,7 +17,7 @@ function showToast(message, type = 'success') {
     setTimeout(() => toast.remove(), 2500);
 }
 
-// 🌟 渲染调度指向
+// 🌟 精致的小芯片选择器
 function renderSelectors() {
     const renderTo = (containerId, sourceList, inputId) => {
         const container = document.getElementById(containerId);
@@ -36,7 +36,7 @@ function renderSelectors() {
     renderTo('sel-route-video', state.video_providers, 'route_video');
 }
 
-// 🌟 算力节点渲染逻辑 (包含模型池)
+// 🌟 算力节点渲染逻辑 (包含按钮切换模式与模型标签)
 function renderProviders() {
     const container = document.getElementById("providers-container");
     if(!container) return;
@@ -47,11 +47,16 @@ function renderProviders() {
                 <button data-action="del-provider" data-index="${i}" style="background:transparent; border:none; color:var(--danger); font-weight:bold; cursor:pointer;">移除</button>
             </div>
             <div class="grid-2-col">
-                <div class="form-group"><label>接口模式</label><select class="input-glass" data-sync="prov-api" data-index="${i}"><option value="openai_image" ${p.api_type==='openai_image'?'selected':''}>openai_image</option><option value="openai_chat" ${p.api_type==='openai_chat'?'selected':''}>openai_chat</option></select></div>
+                <div class="form-group"><label>接口模式</label>
+                    <div class="chip-group">
+                        <div class="api-chip ${p.api_type==='openai_image'?'active':''}" data-sync="prov-api" data-index="${i}" data-val="openai_image">标准生图</div>
+                        <div class="api-chip ${p.api_type==='openai_chat'?'active':''}" data-sync="prov-api" data-index="${i}" data-val="openai_chat">对话透传</div>
+                    </div>
+                </div>
                 <div class="form-group"><label>接口地址</label><input type="text" class="input-glass" value="${p.base_url}" data-sync="prov-url" data-index="${i}"></div>
                 <div class="form-group full-width">
                     <label>算力模型池 (点击设为默认)</label>
-                    <div class="chip-group">
+                    <div class="chip-group" style="margin-bottom: 8px;">
                         ${(p.available_models || []).map((m, mIdx) => `
                             <div class="api-chip ${p.model === m ? 'active' : ''}" data-sync="prov-model-select" data-index="${i}" data-val="${m}">
                                 ${m} <span class="chip-del" data-action="del-prov-model" data-index="${i}" data-midx="${mIdx}">×</span>
@@ -80,11 +85,16 @@ function renderVideoProviders() {
                 <button data-action="del-video-provider" data-index="${i}" style="background:transparent; border:none; color:var(--danger); font-weight:bold; cursor:pointer;">移除</button>
             </div>
             <div class="grid-2-col">
-                <div class="form-group"><label>调用协议</label><select class="input-glass" data-sync="vid-api" data-index="${i}"><option value="async_task" ${p.api_type==='async_task'?'selected':''}>异步轮询</option><option value="openai_sync" ${p.api_type==='openai_sync'?'selected':''}>同步阻塞</option></select></div>
+                <div class="form-group"><label>调用协议</label>
+                    <div class="chip-group">
+                        <div class="api-chip ${p.api_type==='async_task'?'active':''}" data-sync="vid-api" data-index="${i}" data-val="async_task">异步轮询</div>
+                        <div class="api-chip ${p.api_type==='openai_sync'?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_sync">同步阻塞</div>
+                    </div>
+                </div>
                 <div class="form-group"><label>接口地址</label><input type="text" class="input-glass" value="${p.base_url}" data-sync="vid-url" data-index="${i}"></div>
                 <div class="form-group full-width">
                     <label>视频模型池</label>
-                    <div class="chip-group">
+                    <div class="chip-group" style="margin-bottom: 8px;">
                         ${(p.available_models || []).map((m, mIdx) => `
                             <div class="api-chip ${p.model === m ? 'active' : ''}" data-sync="vid-model-select" data-index="${i}" data-val="${m}">
                                 ${m} <span class="chip-del" data-action="del-vid-model" data-index="${i}" data-midx="${mIdx}">×</span>
@@ -107,11 +117,11 @@ function renderPresets() {
     const container = document.getElementById("presets-container");
     if(!container) return;
     container.innerHTML = state.presets.map((p, i) => `
-        <div class="list-item" style="display:flex; align-items:center; gap:10px; padding:10px; background:rgba(255,255,255,0.4); border-radius:12px; margin-bottom:10px;">
+        <div class="list-item">
             <input type="text" class="input-glass" style="width: 140px; border:none; background:transparent; font-weight:bold;" placeholder="指令名" value="${p.name}" data-sync="preset-name" data-index="${i}">
-            <span style="color:var(--text-muted);">→</span>
+            <span style="color:var(--text-muted); font-weight:bold;">→</span>
             <input type="text" class="input-glass" style="flex:1; border:none; background:transparent;" placeholder="描述" value="${p.prompt}" data-sync="preset-prompt" data-index="${i}">
-            <button data-action="del-preset" data-index="${i}" style="background:transparent; border:none; cursor:pointer;">×</button>
+            <button data-action="del-preset" data-index="${i}" style="background:transparent; border:none; cursor:pointer; font-size:18px;">×</button>
         </div>
     `).join('');
 }
@@ -137,6 +147,7 @@ async function init() {
         state.optimizer_config.optimizer_model = opt.optimizer_model || "gpt-4o-mini";
         state.optimizer_config.optimizer_timeout = opt.optimizer_timeout || 15;
         state.optimizer_config.max_batch_count = opt.max_batch_count || 0;
+        state.optimizer_config.optimizer_custom_prompt = opt.optimizer_custom_prompt || "";
 
         state.router_config.chain_text2img = router.chain_text2img || "node_1";
         state.router_config.chain_selfie = router.chain_selfie || "node_1";
@@ -153,23 +164,24 @@ async function init() {
         }));
         state.verbose_report = raw.verbose_report || false;
 
-        // 回显
-        const val = (id, v) => { const el = document.getElementById(id); if(el) el.value = v; };
-        val("perm_allowed_users", state.permission_config.allowed_users);
-        val("persona_name", state.persona_config.persona_name);
-        val("persona_prompt", state.persona_config.persona_base_prompt);
-        val("route_img", state.router_config.chain_text2img);
-        val("route_selfie", state.router_config.chain_selfie);
-        val("route_video", state.router_config.chain_video);
-        val("opt_style", state.optimizer_config.optimizer_style);
-        val("opt_chain", state.optimizer_config.chain_optimizer);
-        val("opt_model", state.optimizer_config.optimizer_model);
-        val("opt_timeout", state.optimizer_config.optimizer_timeout);
-        val("opt_batch", state.optimizer_config.max_batch_count);
+        // 回显基础字段
+        const setVal = (id, v) => { const el = document.getElementById(id); if(el) el.value = v; };
+        setVal("perm_allowed_users", state.permission_config.allowed_users);
+        setVal("persona_name", state.persona_config.persona_name);
+        setVal("persona_prompt", state.persona_config.persona_base_prompt);
+        setVal("route_img", state.router_config.chain_text2img);
+        setVal("route_selfie", state.router_config.chain_selfie);
+        setVal("route_video", state.router_config.chain_video);
+        setVal("opt_style", state.optimizer_config.optimizer_style);
+        setVal("opt_chain", state.optimizer_config.chain_optimizer);
+        setVal("opt_model", state.optimizer_config.optimizer_model);
+        setVal("opt_timeout", state.optimizer_config.optimizer_timeout);
+        setVal("opt_batch", state.optimizer_config.max_batch_count);
+        setVal("opt_custom", state.optimizer_config.optimizer_custom_prompt);
         
-        const check = (id, v) => { const el = document.getElementById(id); if(el) el.checked = v; };
-        check("opt_enable", state.optimizer_config.enable_optimizer);
-        check("verbose_report", state.verbose_report);
+        const setCheck = (id, v) => { const el = document.getElementById(id); if(el) el.checked = v; };
+        setCheck("opt_enable", state.optimizer_config.enable_optimizer);
+        setCheck("verbose_report", state.verbose_report);
 
         renderProviders();
         renderVideoProviders();
@@ -215,7 +227,9 @@ function setupEventDelegation() {
             const sync = apiChip.dataset.sync;
             const idx = parseInt(apiChip.dataset.index, 10);
             const val = apiChip.dataset.val;
-            if (sync === 'prov-model-select') { state.providers[idx].model = val; renderProviders(); } 
+            if (sync === 'prov-api') { state.providers[idx].api_type = val; renderProviders(); } 
+            else if (sync === 'vid-api') { state.video_providers[idx].api_type = val; renderVideoProviders(); }
+            else if (sync === 'prov-model-select') { state.providers[idx].model = val; renderProviders(); } 
             else if (sync === 'vid-model-select') { state.video_providers[idx].model = val; renderVideoProviders(); }
             return;
         }
@@ -255,6 +269,7 @@ function setupEventDelegation() {
         if (act === 'del-vid-model') { e.stopPropagation(); const midx = parseInt(btn.dataset.midx, 10); state.video_providers[idx].available_models.splice(midx, 1); renderVideoProviders(); }
     });
 
+    // 💡 关键：实时同步输入框到内存 state，防止保存时获取的是旧数据
     document.body.addEventListener('input', (e) => {
         const input = e.target;
         const s = input.dataset.sync;
@@ -280,32 +295,29 @@ async function saveConfig(btn) {
     btn.innerText = "部署中...";
     
     try {
-        const val = (id) => document.getElementById(id) ? document.getElementById(id).value : "";
-        const check = (id) => document.getElementById(id) ? document.getElementById(id).checked : false;
+        const getVal = (id) => document.getElementById(id) ? document.getElementById(id).value : "";
+        const getCheck = (id) => document.getElementById(id) ? document.getElementById(id).checked : false;
 
-        state.permission_config.allowed_users = val("perm_allowed_users");
-        state.persona_config.persona_name = val("persona_name");
-        state.persona_config.persona_base_prompt = val("persona_prompt");
-        state.optimizer_config.enable_optimizer = check("opt_enable");
-        state.optimizer_config.optimizer_style = val("opt_style");
-        state.optimizer_config.chain_optimizer = val("opt_chain");
-        state.optimizer_config.optimizer_model = val("opt_model");
-        state.optimizer_config.optimizer_timeout = parseFloat(val("opt_timeout")) || 15;
-        state.optimizer_config.max_batch_count = parseInt(val("opt_batch")) || 0;
-        state.verbose_report = check("verbose_report");
+        state.permission_config.allowed_users = getVal("perm_allowed_users");
+        state.persona_config.persona_name = getVal("persona_name");
+        state.persona_config.persona_base_prompt = getVal("persona_prompt");
+        state.optimizer_config.enable_optimizer = getCheck("opt_enable");
+        state.optimizer_config.optimizer_style = getVal("opt_style");
+        state.optimizer_config.chain_optimizer = getVal("opt_chain");
+        state.optimizer_config.optimizer_model = getVal("opt_model");
+        state.optimizer_config.optimizer_timeout = parseFloat(getVal("opt_timeout")) || 15;
+        state.optimizer_config.max_batch_count = parseInt(getVal("opt_batch")) || 0;
+        state.optimizer_config.optimizer_custom_prompt = getVal("opt_custom");
+        state.verbose_report = getCheck("verbose_report");
 
-        state.router_config.chain_text2img = val("route_img");
-        state.router_config.chain_selfie = val("route_selfie");
-        state.router_config.chain_video = val("route_video");
+        state.router_config.chain_text2img = getVal("route_img");
+        state.router_config.chain_selfie = getVal("route_selfie");
+        state.router_config.chain_video = getVal("route_video");
 
-        const payload = {
-            ...state,
-            presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`)
-        };
-
+        const payload = { ...state, presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`) };
         const res = await bridge.apiPost("save_config", payload);
         if (res.success) showToast("部署成功！");
-        else showToast("部署失败", "error");
+        else showToast("保存异常", "error");
     } catch(e) { showToast("脚本错误", "error"); }
     btn.disabled = false;
     btn.innerText = oldText;

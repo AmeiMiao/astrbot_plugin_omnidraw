@@ -195,6 +195,7 @@ function renderProviders() {
                                 ${m} <span class="chip-del" data-action="del-prov-model" data-index="${i}" data-midx="${mIdx}">×</span>
                             </div>
                         `).join('')}
+                        ${(p.available_models || []).length === 0 ? '<span class="empty-hint">暂无模型，请在下方添加</span>' : ''}
                     </div>
                     <div style="display:flex; gap:10px;">
                         <input type="text" class="input-glass" id="new-model-img-${i}" placeholder="输入新模型名称 (如 dall-e-3)" style="flex:1;">
@@ -235,6 +236,7 @@ function renderVideoProviders() {
                                 ${m} <span class="chip-del" data-action="del-vid-model" data-index="${i}" data-midx="${mIdx}">×</span>
                             </div>
                         `).join('')}
+                        ${(p.available_models || []).length === 0 ? '<span class="empty-hint">暂无模型，请在下方添加</span>' : ''}
                     </div>
                     <div style="display:flex; gap:10px;">
                         <input type="text" class="input-glass" id="new-model-vid-${i}" placeholder="输入视频模型名称" style="flex:1;">
@@ -311,7 +313,8 @@ function setupEventDelegation() {
 
         if (e.target.closest('#persona-upload-trigger')) fileInput.click();
 
-        const btn = e.target.closest('button[data-action]');
+        // 🔴 终极修复：使用 [data-action] 而不仅是 button，这样就能拦截到属于 <span> 的关闭按钮了！
+        const btn = e.target.closest('[data-action]');
         if (!btn) return;
         const act = btn.getAttribute('data-action');
         const idx = parseInt(btn.getAttribute('data-index'), 10);
@@ -348,7 +351,7 @@ function setupEventDelegation() {
             }
         }
         if (act === 'del-prov-model') {
-            e.stopPropagation();
+            e.stopPropagation(); // 防止触发父级 div 的点击事件
             const mIdx = parseInt(btn.getAttribute('data-midx'), 10);
             const removed = state.providers[idx].available_models.splice(mIdx, 1)[0];
             if(state.providers[idx].model === removed) state.providers[idx].model = state.providers[idx].available_models[0] || "";
@@ -383,7 +386,8 @@ function setupEventDelegation() {
         fileInput.value = '';
     });
 
-    // 💡 [前端核心修复] 完全对齐 HTML 里的 data-sync，确保每一个字都能打进 payload
+    // 🔴 终极修复：为了防止因为模型删改导致 UI 重绘（renderProviders）时把未保存的文字清空，
+    // 我们必须保留这个双向绑定的实时同步机制！
     document.body.addEventListener('input', (e) => {
         const input = e.target;
         if (!input.hasAttribute('data-sync')) return;
@@ -394,7 +398,6 @@ function setupEventDelegation() {
         if (s === 'preset-name') state.presets[i].name = v;
         if (s === 'preset-prompt') state.presets[i].prompt = v;
         
-        // 此处不再是错误的 node-id，而是修正过的 prov-id
         if (s === 'prov-id') { state.providers[i].id = v; renderSelectors(); }
         if (s === 'prov-url') state.providers[i].base_url = v;
         if (s === 'prov-time') state.providers[i].timeout = v;
@@ -418,7 +421,34 @@ async function saveConfig(btn) {
     btn.disabled = true;
     const originalText = btn.innerHTML;
     btn.innerHTML = `<span class="spinner">↻</span> 部署中...`;
+    
+    // 强制读取上方固定表单
     readBasicFields();
+
+    // 开启终极快照捕捉，双保险保证不漏数据
+    const getDOMValues = (selector) => Array.from(document.querySelectorAll(selector)).map(el => el.value);
+    
+    const provIds = getDOMValues('[data-sync="prov-id"]');
+    const provUrls = getDOMValues('[data-sync="prov-url"]');
+    const provTimes = getDOMValues('[data-sync="prov-time"]');
+    const provKeys = getDOMValues('[data-sync="prov-keys"]');
+    state.providers.forEach((p, i) => {
+        if(provIds[i] !== undefined) p.id = provIds[i];
+        if(provUrls[i] !== undefined) p.base_url = provUrls[i];
+        if(provTimes[i] !== undefined) p.timeout = parseFloat(provTimes[i]) || 60;
+        if(provKeys[i] !== undefined) p.api_keys = provKeys[i];
+    });
+
+    const vidIds = getDOMValues('[data-sync="vid-id"]');
+    const vidUrls = getDOMValues('[data-sync="vid-url"]');
+    const vidTimes = getDOMValues('[data-sync="vid-time"]');
+    const vidKeys = getDOMValues('[data-sync="vid-keys"]');
+    state.video_providers.forEach((p, i) => {
+        if(vidIds[i] !== undefined) p.id = vidIds[i];
+        if(vidUrls[i] !== undefined) p.base_url = vidUrls[i];
+        if(vidTimes[i] !== undefined) p.timeout = parseFloat(vidTimes[i]) || 300;
+        if(vidKeys[i] !== undefined) p.api_keys = vidKeys[i];
+    });
 
     const payload = {
         ...state,

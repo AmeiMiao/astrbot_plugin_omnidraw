@@ -30,6 +30,9 @@ class PluginConfig:
     persona_base_prompt: str
     persona_ref_image: str
     allowed_users: List[str]
+    # 👇 新增下面两行 👇
+    optimizer_style: str
+    optimizer_custom_prompt: str
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any], data_dir: str) -> "PluginConfig":
@@ -146,6 +149,9 @@ class PluginConfig:
             persona_base_prompt=str(persona_conf.get("persona_base_prompt", "")),
             persona_ref_image=ref_path,
             allowed_users=allowed_users
+            # 👇 新增下面两行 👇
+            optimizer_style=str(opt_conf.get("optimizer_style", "手机日常原生感")),
+            optimizer_custom_prompt=str(opt_conf.get("optimizer_custom_prompt", ""))
         )
 
     def get_provider(self, provider_id: str) -> Optional[ProviderConfig]:

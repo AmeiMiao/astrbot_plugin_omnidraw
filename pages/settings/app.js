@@ -59,15 +59,19 @@ async function init() {
     const perm = rawConfig.permission_config || rawConfig;
     const pers = rawConfig.persona_config || rawConfig;
     const opt = rawConfig.optimizer_config || rawConfig;
-    const router = rawConfig.router_config || rawConfig;
+    const route = rawConfig.router_config || rawConfig;
 
     state.permission_config.allowed_users = pers.allowed_users || perm.allowed_users || "";
-    state.router_config.chain_text2img = deepFind(router, ["chain_text2img"], "node_1");
-    state.router_config.chain_selfie = deepFind(router, ["chain_selfie"], "node_1");
-    state.router_config.chain_video = deepFind(router, ["chain_video"], "video_node_1");
+    state.router_config.chain_text2img = deepFind(route, ["chain_text2img"], "node_1");
+    state.router_config.chain_selfie = deepFind(route, ["chain_selfie"], "node_1");
+    state.router_config.chain_video = deepFind(route, ["chain_video"], "video_node_1");
     state.persona_config.persona_name = deepFind(pers, ["persona_name"], "默认助理");
     state.persona_config.persona_base_prompt = deepFind(pers, ["persona_base_prompt"]);
-    state.persona_config.persona_ref_image = Array.isArray(deepFind(pers, ["persona_ref_image"])) ? deepFind(pers, ["persona_ref_image"]) : [];
+    
+    let rawImage = deepFind(pers, ["persona_ref_image"]);
+    if (typeof rawImage === 'string' && rawImage.trim() !== '') state.persona_config.persona_ref_image = [rawImage];
+    else if (Array.isArray(rawImage)) state.persona_config.persona_ref_image = rawImage;
+    else state.persona_config.persona_ref_image = [];
 
     state.optimizer_config.enable_optimizer = deepFind(opt, ["enable_optimizer"], true);
     state.optimizer_config.optimizer_style = deepFind(opt, ["optimizer_style"], "手机日常原生感");
@@ -79,13 +83,35 @@ async function init() {
 
     state.presets = (rawConfig.presets || []).map(p => typeof p === 'string' ? { name: p.split(':')[0], prompt: p.split(':')[1] } : p);
     
-    const parseP = (list) => (list || []).map(p => ({
-        id: p.id || '', api_type: p.api_type || '', base_url: p.base_url || '',
-        model: p.model || "", available_models: p.available_models || [],
-        timeout: p.timeout || 60, api_keys: Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || '')
-    }));
-    state.providers = parseP(rawConfig.providers);
-    state.video_providers = parseP(rawConfig.video_providers);
+    state.providers = (rawConfig.providers || []).map(p => {
+        let avail = p.available_models || [];
+        if(avail.length === 0) {
+            const mRaw = p.model || p['模型名称'] || '';
+            avail = mRaw.split(',').map(s=>s.trim()).filter(Boolean);
+        }
+        let defModel = p.model || (avail.length > 0 ? avail[0] : "");
+        return {
+            id: p.id || p['节点ID'] || '', api_type: p.api_type || p['接口模式'] || 'openai_image',
+            base_url: p.base_url || p['接口地址 (需含/v1)'] || '', model: defModel, available_models: avail,
+            timeout: p.timeout || p['超时时间(秒)'] || 60, api_keys: Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || p['API密钥'] || '')
+        };
+    });
+    
+    state.video_providers = (rawConfig.video_providers || []).map(p => {
+        let avail = p.available_models || [];
+        if(avail.length === 0) {
+            const mRaw = p.model || p['模型名称'] || '';
+            avail = mRaw.split(',').map(s=>s.trim()).filter(Boolean);
+        }
+        let defModel = p.model || (avail.length > 0 ? avail[0] : "");
+        return {
+            id: p.id || p['节点ID'] || '', api_type: p.api_type || p['接口模式'] || 'async_task',
+            base_url: p.base_url || p['接口地址 (需含/v1或/v2)'] || p['接口地址 (需含/v1)'] || '',
+            model: defModel, available_models: avail, timeout: p.timeout || p['超时时间(秒)'] || 300,
+            api_keys: Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || p['API密钥'] || '')
+        };
+    });
+
     state.verbose_report = rawConfig.verbose_report || false;
 
     bindBasicFields();
@@ -110,6 +136,7 @@ function bindBasicFields() {
     document.getElementById("opt_model").value = state.optimizer_config.optimizer_model;
     document.getElementById("opt_timeout").value = state.optimizer_config.optimizer_timeout;
     document.getElementById("opt_batch").value = state.optimizer_config.max_batch_count;
+    document.getElementById("opt_custom").value = state.optimizer_config.optimizer_custom_prompt;
     document.getElementById("verbose_report").checked = state.verbose_report;
 }
 
@@ -126,14 +153,27 @@ function readBasicFields() {
     state.optimizer_config.optimizer_model = document.getElementById("opt_model").value;
     state.optimizer_config.optimizer_timeout = parseFloat(document.getElementById("opt_timeout").value);
     state.optimizer_config.max_batch_count = parseInt(document.getElementById("opt_batch").value);
+    state.optimizer_config.optimizer_custom_prompt = document.getElementById("opt_custom").value;
     state.verbose_report = document.getElementById("verbose_report").checked;
+}
+
+function renderPresets() {
+    const html = state.presets.map((p, i) => `
+        <div class="list-item">
+            <input type="text" class="input-glass preset-name" style="width: 140px; border:none; background:transparent;" placeholder="快捷指令名" value="${p.name}" data-sync="preset-name" data-index="${i}">
+            <span style="color:var(--text-muted); font-weight: bold; margin: 0 10px;">→</span>
+            <input type="text" class="input-glass preset-prompt" style="flex:1; border:none; background:transparent;" placeholder="底层的英文描述与参数" value="${p.prompt}" data-sync="preset-prompt" data-index="${i}">
+            <button data-action="del-preset" data-index="${i}" class="btn-glass-secondary" style="border:none; color:var(--text-muted); font-size:16px;">×</button>
+        </div>
+    `).join('');
+    document.getElementById("presets-container").innerHTML = html || '<div style="text-align:center; padding: 30px; color: var(--text-muted);">尚未配置快捷指令</div>';
 }
 
 function renderProviders() {
     const html = state.providers.map((p, i) => `
         <div class="glass-card" style="padding: 24px; margin-bottom: 16px;">
             <div class="card-header" style="margin-bottom: 16px; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 12px;">
-                <input type="text" class="input-glass" style="width: 200px; font-weight:bold; font-size: 16px; background: transparent; border:none; border-bottom: 1px solid rgba(0,0,0,0.1);" placeholder="节点 ID" value="${p.id}" data-sync="prov-id" data-index="${i}">
+                <input type="text" class="input-glass" style="width: 200px; font-weight:bold; font-size: 16px; background: transparent; border:none; border-bottom: 1px solid transparent;" placeholder="输入节点 ID" value="${p.id}" data-sync="prov-id" data-index="${i}">
                 <button data-action="del-provider" data-index="${i}" style="background:transparent; border:none; color:var(--danger); font-weight:bold; cursor:pointer;">移除</button>
             </div>
             <div class="grid-2-col">
@@ -144,20 +184,23 @@ function renderProviders() {
                     </div>
                 </div>
                 <div class="form-group"><label>接口地址 (需含/v1)</label><input type="text" class="input-glass" value="${p.base_url}" data-sync="prov-url" data-index="${i}"></div>
+                
                 <div class="form-group full-width">
-                    <label>算力模型池</label>
+                    <label>算力模型池 (点击设为默认，点击 × 移除)</label>
                     <div class="chip-group" style="margin-bottom: 8px;">
                         ${(p.available_models || []).map((m, mIdx) => `
                             <div class="api-chip ${p.model === m ? 'active' : ''}" data-sync="prov-model-select" data-index="${i}" data-val="${m}">
                                 ${m} <span class="chip-del" data-action="del-prov-model" data-index="${i}" data-midx="${mIdx}">×</span>
                             </div>
                         `).join('')}
+                        ${(p.available_models || []).length === 0 ? '<span class="empty-hint">暂无模型，请在下方添加</span>' : ''}
                     </div>
                     <div style="display:flex; gap:10px;">
-                        <input type="text" class="input-glass" id="new-model-img-${i}" placeholder="添加模型名称" style="flex:1;">
+                        <input type="text" class="input-glass" id="new-model-img-${i}" placeholder="输入新模型名称 (如 dall-e-3)" style="flex:1;">
                         <button data-action="add-prov-model" data-index="${i}" class="btn-glass-secondary">添加模型</button>
                     </div>
                 </div>
+
                 <div class="form-group"><label>请求超时</label><input type="number" class="input-glass" value="${p.timeout}" data-sync="prov-time" data-index="${i}"></div>
                 <div class="form-group full-width"><label>API Keys</label><textarea class="input-glass" rows="1" data-sync="prov-keys" data-index="${i}">${p.api_keys}</textarea></div>
             </div>
@@ -170,32 +213,36 @@ function renderVideoProviders() {
     const html = state.video_providers.map((p, i) => `
         <div class="glass-card" style="padding: 24px; margin-bottom: 16px;">
             <div class="card-header" style="margin-bottom: 16px; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 12px;">
-                <input type="text" class="input-glass" style="width: 200px; font-weight:bold; font-size: 16px; background: transparent; border:none; border-bottom: 1px solid rgba(0,0,0,0.1);" placeholder="视频节点 ID" value="${p.id}" data-sync="vid-id" data-index="${i}">
+                <input type="text" class="input-glass" style="width: 200px; font-weight:bold; font-size: 16px; background: transparent; border:none; border-bottom: 1px solid transparent;" placeholder="输入视频节点 ID" value="${p.id}" data-sync="vid-id" data-index="${i}">
                 <button data-action="del-video-provider" data-index="${i}" style="background:transparent; border:none; color:var(--danger); font-weight:bold; cursor:pointer;">移除</button>
             </div>
             <div class="grid-2-col">
                 <div class="form-group"><label>调用协议</label>
                     <div class="chip-group">
-                        <div class="api-chip ${p.api_type==='async_task'?'active':''}" data-sync="vid-api" data-index="${i}" data-val="async_task">异步轮询</div>
-                        <div class="api-chip ${p.api_type==='openai_sync'?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_sync">同步阻塞</div>
+                        <div class="api-chip ${(p.api_type||'').includes('async_task')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="async_task">异步轮询</div>
+                        <div class="api-chip ${(p.api_type||'').includes('openai_sync')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_sync">同步阻塞</div>
+                        <div class="api-chip ${(p.api_type||'').includes('openai_chat')?'active':''}" data-sync="vid-api" data-index="${i}" data-val="openai_chat">对话伪装</div>
                     </div>
                 </div>
                 <div class="form-group"><label>接口地址</label><input type="text" class="input-glass" value="${p.base_url}" data-sync="vid-url" data-index="${i}"></div>
+                
                 <div class="form-group full-width">
-                    <label>视频模型池</label>
+                    <label>视频模型池 (点击设为默认，点击 × 移除)</label>
                     <div class="chip-group" style="margin-bottom: 8px;">
                         ${(p.available_models || []).map((m, mIdx) => `
                             <div class="api-chip ${p.model === m ? 'active' : ''}" data-sync="vid-model-select" data-index="${i}" data-val="${m}">
                                 ${m} <span class="chip-del" data-action="del-vid-model" data-index="${i}" data-midx="${mIdx}">×</span>
                             </div>
                         `).join('')}
+                        ${(p.available_models || []).length === 0 ? '<span class="empty-hint">暂无模型，请在下方添加</span>' : ''}
                     </div>
                     <div style="display:flex; gap:10px;">
-                        <input type="text" class="input-glass" id="new-model-vid-${i}" placeholder="输入视频模型" style="flex:1;">
+                        <input type="text" class="input-glass" id="new-model-vid-${i}" placeholder="输入视频模型名称" style="flex:1;">
                         <button data-action="add-vid-model" data-index="${i}" class="btn-glass-secondary">添加模型</button>
                     </div>
                 </div>
-                <div class="form-group"><label>超时(秒)</label><input type="number" class="input-glass" value="${p.timeout}" data-sync="vid-time" data-index="${i}"></div>
+
+                <div class="form-group"><label>请求超时</label><input type="number" class="input-glass" value="${p.timeout}" data-sync="vid-time" data-index="${i}"></div>
                 <div class="form-group full-width"><label>API Keys</label><textarea class="input-glass" rows="1" data-sync="vid-keys" data-index="${i}">${p.api_keys}</textarea></div>
             </div>
         </div>
@@ -203,35 +250,47 @@ function renderVideoProviders() {
     document.getElementById("video-providers-container").innerHTML = html;
 }
 
-function renderPresets() {
-    const html = state.presets.map((p, i) => `
-        <div class="list-item">
-            <input type="text" class="input-glass" style="width: 140px; border:none; background:transparent; font-weight:bold;" placeholder="指令名" value="${p.name}" data-sync="p-n" data-index="${i}">
-            <span style="color:var(--text-muted);">→</span>
-            <input type="text" class="input-glass" style="flex:1; border:none; background:transparent;" placeholder="描述" value="${p.prompt}" data-sync="p-p" data-index="${i}">
-            <button data-action="del-preset" data-index="${i}" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:18px;">×</button>
-        </div>
-    `).join('');
-    document.getElementById("presets-container").innerHTML = html;
-}
-
 function setupEventDelegation() {
     const fileInput = document.getElementById('hidden-file-input');
     
+    const animateAdd = (containerId) => {
+        setTimeout(() => {
+            const container = document.getElementById(containerId);
+            const el = container.lastElementChild;
+            if(el) {
+                el.classList.add('node-enter');
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 10);
+    };
+
+    const animateDel = (containerId, stateArray, index, renderFn, callback) => {
+        const container = document.getElementById(containerId);
+        const el = container.children[index];
+        if (el) {
+            el.classList.add('node-exit');
+            setTimeout(() => {
+                stateArray.splice(index, 1);
+                renderFn();
+                if(callback) callback();
+            }, 300);
+        }
+    };
+
     document.body.addEventListener('click', (e) => {
         const navItem = e.target.closest('.nav-item');
         if (navItem) {
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             navItem.classList.add('active');
             document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-            document.getElementById(navItem.dataset.target).classList.add('active');
+            document.getElementById(navItem.getAttribute('data-target')).classList.add('active');
             return;
         }
 
         const chip = e.target.closest('.selector-chip');
         if (chip) {
-            const inputId = chip.dataset.input;
-            document.getElementById(inputId).value = chip.dataset.id;
+            const inputId = chip.getAttribute('data-input');
+            document.getElementById(inputId).value = chip.getAttribute('data-id');
             document.querySelectorAll(`.selector-chip[data-input="${inputId}"]`).forEach(c => c.classList.remove('active'));
             chip.classList.add('active');
             return;
@@ -239,9 +298,10 @@ function setupEventDelegation() {
 
         const apiChip = e.target.closest('.api-chip');
         if (apiChip && !e.target.closest('.chip-del')) {
-            const sync = apiChip.dataset.sync;
-            const idx = parseInt(apiChip.dataset.index, 10);
-            const val = apiChip.dataset.val;
+            const sync = apiChip.getAttribute('data-sync');
+            const idx = parseInt(apiChip.getAttribute('data-index'), 10);
+            const val = apiChip.getAttribute('data-val');
+            
             if (sync === 'prov-api') { state.providers[idx].api_type = val; renderProviders(); } 
             else if (sync === 'vid-api') { state.video_providers[idx].api_type = val; renderVideoProviders(); }
             else if (sync === 'prov-model-select') { state.providers[idx].model = val; renderProviders(); } 
@@ -257,32 +317,46 @@ function setupEventDelegation() {
         const idx = parseInt(btn.getAttribute('data-index'), 10);
 
         if (act === 'save-config') saveConfig(btn);
-        if (act === 'add-preset') { state.presets.push({name:"", prompt:""}); renderPresets(); }
-        if (act === 'del-preset') { state.presets.splice(idx, 1); renderPresets(); }
-        if (act === 'add-provider') { state.providers.push({id:`node_${state.providers.length+1}`, api_type:"openai_image", base_url:"", model:"", available_models:[], api_keys:"", timeout:60}); renderProviders(); renderSelectors(); }
-        if (act === 'del-provider') { state.providers.splice(idx, 1); renderProviders(); renderSelectors(); }
-        if (act === 'add-video-provider') { state.video_providers.push({id:`v_node_${state.video_providers.length+1}`, api_type:"async_task", base_url:"", model:"", available_models:[], api_keys:"", timeout:300}); renderVideoProviders(); renderSelectors(); }
-        if (act === 'del-video-provider') { state.video_providers.splice(idx, 1); renderVideoProviders(); renderSelectors(); }
-        if (act === 'del-persona-img') { state.persona_config.persona_ref_image.splice(idx, 1); renderPersonaImages(); }
+        
+        if (act === 'add-preset') { state.presets.push({name:"", prompt:""}); renderPresets(); animateAdd('presets-container'); }
+        if (act === 'del-preset') { animateDel('presets-container', state.presets, idx, renderPresets); }
+        
+        if (act === 'add-provider') { state.providers.push({id:`node_${state.providers.length+1}`, api_type:"openai_image", base_url:"", model:"", available_models:[], api_keys:"", timeout:60}); renderProviders(); renderSelectors(); animateAdd('providers-container'); }
+        if (act === 'del-provider') { animateDel('providers-container', state.providers, idx, renderProviders, renderSelectors); }
+        
+        if (act === 'add-video-provider') { state.video_providers.push({id:`v_node_${state.video_providers.length+1}`, api_type:"async_task", base_url:"", model:"", available_models:[], api_keys:"", timeout:300}); renderVideoProviders(); renderSelectors(); animateAdd('video-providers-container'); }
+        if (act === 'del-video-provider') { animateDel('video-providers-container', state.video_providers, idx, renderVideoProviders, renderSelectors); }
+        
+        if (act === 'del-persona-img') { animateDel('persona-upload-container', state.persona_config.persona_ref_image, idx, renderPersonaImages); }
 
         if (act === 'add-prov-model') {
-            const val = document.getElementById(`new-model-img-${idx}`).value.trim();
-            if(val) { state.providers[idx].available_models.push(val); if(!state.providers[idx].model) state.providers[idx].model = val; renderProviders(); }
+            const input = document.getElementById(`new-model-img-${idx}`);
+            const newModel = input.value.trim();
+            if(newModel && !state.providers[idx].available_models.includes(newModel)) {
+                state.providers[idx].available_models.push(newModel);
+                if(!state.providers[idx].model) state.providers[idx].model = newModel;
+                renderProviders();
+            }
         }
         if (act === 'add-vid-model') {
-            const val = document.getElementById(`new-model-vid-${idx}`).value.trim();
-            if(val) { state.video_providers[idx].available_models.push(val); if(!state.video_providers[idx].model) state.video_providers[idx].model = val; renderVideoProviders(); }
+            const input = document.getElementById(`new-model-vid-${idx}`);
+            const newModel = input.value.trim();
+            if(newModel && !state.video_providers[idx].available_models.includes(newModel)) {
+                state.video_providers[idx].available_models.push(newModel);
+                if(!state.video_providers[idx].model) state.video_providers[idx].model = newModel;
+                renderVideoProviders();
+            }
         }
         if (act === 'del-prov-model') {
             e.stopPropagation();
-            const mIdx = parseInt(btn.dataset.midx, 10);
+            const mIdx = parseInt(btn.getAttribute('data-midx'), 10);
             const removed = state.providers[idx].available_models.splice(mIdx, 1)[0];
             if(state.providers[idx].model === removed) state.providers[idx].model = state.providers[idx].available_models[0] || "";
             renderProviders();
         }
         if (act === 'del-vid-model') {
             e.stopPropagation();
-            const mIdx = parseInt(btn.dataset.midx, 10);
+            const mIdx = parseInt(btn.getAttribute('data-midx'), 10);
             const removed = state.video_providers[idx].available_models.splice(mIdx, 1)[0];
             if(state.video_providers[idx].model === removed) state.video_providers[idx].model = state.video_providers[idx].available_models[0] || "";
             renderVideoProviders();
@@ -290,45 +364,94 @@ function setupEventDelegation() {
     });
 
     fileInput.addEventListener('change', function(e) {
-        Array.from(e.target.files).forEach(file => {
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+        let loadedCount = 0;
+        if (!state.persona_config.persona_ref_image) state.persona_config.persona_ref_image = [];
+        files.forEach(file => {
             const reader = new FileReader();
-            reader.onload = (evt) => { state.persona_config.persona_ref_image.push(evt.target.result); renderPersonaImages(); };
+            reader.onload = function(evt) {
+                state.persona_config.persona_ref_image.push(evt.target.result);
+                loadedCount++;
+                if (loadedCount === files.length) {
+                    renderPersonaImages();
+                    showToast(`成功提取 ${files.length} 张图片`);
+                }
+            };
             reader.readAsDataURL(file);
         });
         fileInput.value = '';
     });
 
-    // 💡 修正重点：监听器的 ID 映射必须与模板 data-sync 绝对对齐
+    // 弃用脆弱的动态绑定，改用下方的“强力快照读取”方案
     document.body.addEventListener('input', (e) => {
+        // 保留这里是为了实时更新调度节点的选项，不涉及数据持久化
         const input = e.target;
-        const s = input.dataset.sync;
-        const i = parseInt(input.dataset.index, 10);
-        if (!s) return;
-        const v = input.value;
-        if (s === 'p-n') state.presets[i].name = v;
-        if (s === 'p-p') state.presets[i].prompt = v;
-        if (s === 'prov-id') { state.providers[i].id = v; renderSelectors(); }
-        if (s === 'prov-url') state.providers[i].base_url = v;
-        if (s === 'prov-time') state.providers[i].timeout = v;
-        if (s === 'prov-keys') state.providers[i].api_keys = v;
-        if (s === 'vid-id') { state.video_providers[i].id = v; renderSelectors(); }
-        if (s === 'vid-url') state.video_providers[i].base_url = v;
-        if (s === 'vid-time') state.video_providers[i].timeout = v;
-        if (s === 'vid-keys') state.video_providers[i].api_keys = v;
+        const s = input.getAttribute('data-sync');
+        if (s === 'prov-id' || s === 'vid-id') renderSelectors();
     });
 }
 
 async function saveConfig(btn) {
     btn.disabled = true;
-    const oldText = btn.innerHTML;
+    const originalText = btn.innerHTML;
     btn.innerHTML = `<span class="spinner">↻</span> 部署中...`;
+    
+    // 读取静态单行字段
     readBasicFields();
+
+    // 💡 新思路：在保存的一瞬间，强行从 DOM 获取最新的输入值
+    // 彻底解决之前因为名字对不上导致状态丢失的 BUG
+    const getDOMValues = (selector) => Array.from(document.querySelectorAll(selector)).map(el => el.value);
+
+    // 1. 强力抓取生图节点数据
+    const provIds = getDOMValues('[data-sync="prov-id"]');
+    const provUrls = getDOMValues('[data-sync="prov-url"]');
+    const provTimes = getDOMValues('[data-sync="prov-time"]');
+    const provKeys = getDOMValues('[data-sync="prov-keys"]');
+    
+    state.providers.forEach((p, i) => {
+        if(provIds[i] !== undefined) p.id = provIds[i];
+        if(provUrls[i] !== undefined) p.base_url = provUrls[i];
+        if(provTimes[i] !== undefined) p.timeout = parseFloat(provTimes[i]) || 60;
+        if(provKeys[i] !== undefined) p.api_keys = provKeys[i];
+    });
+
+    // 2. 强力抓取视频节点数据
+    const vidIds = getDOMValues('[data-sync="vid-id"]');
+    const vidUrls = getDOMValues('[data-sync="vid-url"]');
+    const vidTimes = getDOMValues('[data-sync="vid-time"]');
+    const vidKeys = getDOMValues('[data-sync="vid-keys"]');
+    
+    state.video_providers.forEach((p, i) => {
+        if(vidIds[i] !== undefined) p.id = vidIds[i];
+        if(vidUrls[i] !== undefined) p.base_url = vidUrls[i];
+        if(vidTimes[i] !== undefined) p.timeout = parseFloat(vidTimes[i]) || 300;
+        if(vidKeys[i] !== undefined) p.api_keys = vidKeys[i];
+    });
+
+    // 3. 强力抓取快捷宏数据
+    const presetNames = getDOMValues('[data-sync="preset-name"]');
+    const presetPrompts = getDOMValues('[data-sync="preset-prompt"]');
+    
+    state.presets.forEach((p, i) => {
+        if(presetNames[i] !== undefined) p.name = presetNames[i];
+        if(presetPrompts[i] !== undefined) p.prompt = presetPrompts[i];
+    });
+
+    const payload = {
+        ...state,
+        presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`),
+        verbose_report: state.verbose_report
+    };
+
     try {
-        const res = await bridge.apiPost("save_config", { ...state, presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`) });
-        if (res.success) showToast("部署成功！");
+        const res = await bridge.apiPost("save_config", payload);
+        if (res.success) showToast("部署成功，已生效！");
         else showToast("部署异常", "error");
     } catch(e) { showToast("网络错误", "error"); }
-    btn.disabled = false;
-    btn.innerHTML = oldText;
+    
+    setTimeout(() => { btn.disabled = false; btn.innerHTML = originalText; }, 800);
 }
+
 init();

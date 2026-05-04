@@ -46,13 +46,13 @@
                 <section class="card glass-card">
                     <div class="form-group">
                         <label>许可白名单 (QQ号)</label>
-                        <input type="text" id="perm_allowed_users" class="input-glass" placeholder="输入QQ号，逗号分隔。" />
+                        <input type="text" id="perm_allowed_users" class="input-glass" placeholder="输入QQ号，逗号分隔。留空则全域开放。" />
                     </div>
                     <div class="divider"></div>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <label style="margin-bottom: 4px; display: block; color: var(--text-main); font-size: 13px;">详细汇报模式 (Verbose)</label>
-                            <span style="font-size: 11px; color: var(--text-muted);">开启后在聊天中输出详细提示词和参考图识别信息。</span>
+                            <span style="font-size: 11px; color: var(--text-muted);">开启后，画图前输出最终提示词、透传参数和参考图识别结果。</span>
                         </div>
                         <div class="switch-wrapper"><input type="checkbox" id="verbose_report" class="ios-switch"></div>
                     </div>
@@ -68,14 +68,14 @@
                     </section>
                     <section class="card glass-card">
                         <div class="form-group">
-                            <label>多模态参考图矩阵</label>
+                            <label>多模态参考图矩阵 (保留原比例)</label>
                             <div class="multi-upload-container" id="persona-upload-container">
                                 <div class="upload-trigger glass-trigger" id="persona-upload-trigger">
                                     <span class="upload-icon">+</span>
                                     <span class="upload-text">添加图片</span>
                                 </div>
                             </div>
-                            <input type="file" id="hidden-file-input" accept="image/*" multiple style="display: none;" />
+                            <input type="file" id="hidden-file-input" accept="image/png, image/jpeg, image/webp" multiple style="display: none;" />
                         </div>
                     </section>
                 </div>
@@ -105,7 +105,7 @@
                         <div class="form-group"><label>模型核心</label><input type="text" id="opt_model" class="input-glass" /></div>
                         <div class="form-group"><label>超时限制 (秒)</label><input type="number" id="opt_timeout" class="input-glass" /></div>
                         <div class="form-group full-width"><label>并发上限 (0 为不限)</label><input type="number" id="opt_batch" class="input-glass" /></div>
-                        <div class="form-group full-width"><label>自定义注入要求</label><textarea id="opt_custom" rows="2" class="input-glass"></textarea></div>
+                        <div class="form-group full-width"><label>自定义注入要求</label><textarea id="opt_custom" rows="2" class="input-glass" placeholder="补充特定的画面要求..."></textarea></div>
                     </div>
                 </section>
             </div>

@@ -5,17 +5,18 @@ let state = {
     presets: [], providers: [], video_providers: []
 };
 
+// 丝滑弹窗系统
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.innerHTML = `<span class="toast-icon">${type === 'success' ? '⚡' : '⚠'}</span><span class="toast-text">${message}</span>`;
+    toast.innerHTML = `<span class="toast-text">${message}</span>`;
     container.appendChild(toast);
     setTimeout(() => toast.classList.add('toast-fadeout'), 2500);
     setTimeout(() => toast.remove(), 2800);
 }
 
-// 🟢 终极数据打捞器：穿透层级寻找旧配置
+// 深度数据打捞 (确保旧数据100%找回)
 const deepFind = (obj, keys, def = "") => {
     if (!obj) return def;
     for (const key of keys) {
@@ -28,7 +29,6 @@ async function init() {
     const context = await bridge.ready();
     const rawConfig = await bridge.apiGet("get_config") || {};
     
-    // 💡 智能恢复旧版配置：检查模块内部，如果找不到，去外层找！
     const perm = rawConfig.permission_config || rawConfig;
     const pers = rawConfig.persona_config || rawConfig;
     const opt = rawConfig.optimizer_config || rawConfig;
@@ -123,70 +123,74 @@ function readBasicFields() {
 function renderPresets() {
     const html = state.presets.map((p, i) => `
         <div class="list-item">
-            <input type="text" class="input-cyber preset-name" placeholder="指令宏" value="${p.name}" data-sync="preset-name" data-index="${i}">
-            <span class="colon">//</span>
-            <input type="text" class="input-cyber preset-prompt" placeholder="底层机器指令" value="${p.prompt}" data-sync="preset-prompt" data-index="${i}">
-            <button data-action="del-preset" data-index="${i}" class="btn-icon btn-danger">X</button>
+            <input type="text" class="input-modern preset-name" placeholder="预设指令名" value="${p.name}" data-sync="preset-name" data-index="${i}">
+            <span class="divider-text">映射为</span>
+            <input type="text" class="input-modern preset-prompt" placeholder="对应的底层提示词" value="${p.prompt}" data-sync="preset-prompt" data-index="${i}">
+            <button data-action="del-preset" data-index="${i}" class="btn-icon">×</button>
         </div>
     `).join('');
-    document.getElementById("presets-container").innerHTML = html || '<div class="empty-tip">MACRO_EMPTY // 未载入指令宏</div>';
+    document.getElementById("presets-container").innerHTML = html || '<div class="empty-tip">暂无预设指令</div>';
 }
 
 function renderProviders() {
     const html = state.providers.map((p, i) => `
         <div class="list-card">
             <div class="list-card-header">
-                <div class="node-badge">NODE_${i+1}</div>
-                <input type="text" class="input-cyber inline-input" placeholder="ID" value="${p.id}" data-sync="prov-id" data-index="${i}">
-                <button data-action="del-provider" data-index="${i}" class="btn-text-danger">DELETE_NODE</button>
+                <div class="node-title">
+                    <span class="node-badge">Image Node ${i+1}</span>
+                    <input type="text" class="input-modern input-minimal" placeholder="节点ID" value="${p.id}" data-sync="prov-id" data-index="${i}">
+                </div>
+                <button data-action="del-provider" data-index="${i}" class="btn-text">移除</button>
             </div>
             <div class="grid-2-col">
                 <div class="form-group">
-                    <label>API_TYPE [通信协议]</label>
-                    <select class="input-cyber select-cyber" data-sync="prov-api" data-index="${i}">
-                        <option value="openai_image" ${p.api_type==='openai_image'?'selected':''}>标准生图 (openai_image)</option>
-                        <option value="openai_chat" ${p.api_type==='openai_chat'?'selected':''}>对话透传 (openai_chat)</option>
+                    <label>接口模式</label>
+                    <select class="input-modern select-modern" data-sync="prov-api" data-index="${i}">
+                        <option value="openai_image" ${p.api_type==='openai_image'?'selected':''}>openai_image (标准生图)</option>
+                        <option value="openai_chat" ${p.api_type==='openai_chat'?'selected':''}>openai_chat (对话透传)</option>
                     </select>
                 </div>
-                <div class="form-group"><label>ENDPOINT [接入点]</label><input type="text" class="input-cyber" value="${p.base_url}" data-sync="prov-url" data-index="${i}"></div>
-                <div class="form-group"><label>MODEL_CORE [运算核心]</label><input type="text" class="input-cyber" value="${p.model}" data-sync="prov-model" data-index="${i}"></div>
-                <div class="form-group"><label>TIMEOUT_LIMIT</label><input type="number" class="input-cyber" value="${p.timeout}" data-sync="prov-time" data-index="${i}"></div>
-                <div class="form-group full-width"><label>API_KEY [授权秘钥]</label><textarea class="input-cyber" rows="2" data-sync="prov-keys" data-index="${i}">${p.api_keys}</textarea></div>
+                <div class="form-group"><label>接口地址 (需含/v1)</label><input type="text" class="input-modern" value="${p.base_url}" data-sync="prov-url" data-index="${i}"></div>
+                <div class="form-group"><label>可用模型 (逗号分隔)</label><input type="text" class="input-modern" value="${p.model}" data-sync="prov-model" data-index="${i}"></div>
+                <div class="form-group"><label>请求超时限制</label><input type="number" class="input-modern" value="${p.timeout}" data-sync="prov-time" data-index="${i}"></div>
+                <div class="form-group full-width"><label>API Keys (支持多行负载均衡)</label><textarea class="input-modern" rows="2" data-sync="prov-keys" data-index="${i}">${p.api_keys}</textarea></div>
             </div>
         </div>
     `).join('');
-    document.getElementById("providers-container").innerHTML = html || '<div class="empty-tip">OFFLINE // 无活动节点</div>';
+    document.getElementById("providers-container").innerHTML = html || '<div class="empty-tip">未配置生图节点</div>';
 }
 
 function renderVideoProviders() {
     const html = state.video_providers.map((p, i) => `
         <div class="list-card">
             <div class="list-card-header">
-                <div class="node-badge video-badge">VIDEO_NODE_${i+1}</div>
-                <input type="text" class="input-cyber inline-input" placeholder="ID" value="${p.id}" data-sync="vid-id" data-index="${i}">
-                <button data-action="del-video-provider" data-index="${i}" class="btn-text-danger">DELETE_NODE</button>
+                <div class="node-title">
+                    <span class="node-badge">Video Node ${i+1}</span>
+                    <input type="text" class="input-modern input-minimal" placeholder="节点ID" value="${p.id}" data-sync="vid-id" data-index="${i}">
+                </div>
+                <button data-action="del-video-provider" data-index="${i}" class="btn-text">移除</button>
             </div>
             <div class="grid-2-col">
                 <div class="form-group">
-                    <label>API_TYPE [通信协议]</label>
-                    <select class="input-cyber select-cyber" data-sync="vid-api" data-index="${i}">
-                        <option value="async_task (异步排队轮询/videos/generations)" ${p.api_type.includes('async_task')?'selected':''}>异步轮询</option>
-                        <option value="openai_sync (同步阻塞直返)" ${p.api_type.includes('openai_sync')?'selected':''}>同步阻塞</option>
-                        <option value="openai_chat (对话伪装视频/chat/completions)" ${p.api_type.includes('openai_chat')?'selected':''}>伪装协议</option>
+                    <label>通信协议</label>
+                    <select class="input-modern select-modern" data-sync="vid-api" data-index="${i}">
+                        <option value="async_task (异步排队轮询/videos/generations)" ${p.api_type.includes('async_task')?'selected':''}>异步排队轮询</option>
+                        <option value="openai_sync (同步阻塞直返)" ${p.api_type.includes('openai_sync')?'selected':''}>同步阻塞返回</option>
+                        <option value="openai_chat (对话伪装视频/chat/completions)" ${p.api_type.includes('openai_chat')?'selected':''}>对话伪装协议</option>
                     </select>
                 </div>
-                <div class="form-group"><label>ENDPOINT [接入点]</label><input type="text" class="input-cyber" value="${p.base_url}" data-sync="vid-url" data-index="${i}"></div>
-                <div class="form-group"><label>MODEL_CORE</label><input type="text" class="input-cyber" value="${p.model}" data-sync="vid-model" data-index="${i}"></div>
-                <div class="form-group"><label>TIMEOUT_LIMIT</label><input type="number" class="input-cyber" value="${p.timeout}" data-sync="vid-time" data-index="${i}"></div>
-                <div class="form-group full-width"><label>API_KEY [授权秘钥]</label><textarea class="input-cyber" rows="2" data-sync="vid-keys" data-index="${i}">${p.api_keys}</textarea></div>
+                <div class="form-group"><label>接口地址</label><input type="text" class="input-modern" value="${p.base_url}" data-sync="vid-url" data-index="${i}"></div>
+                <div class="form-group"><label>模型名称</label><input type="text" class="input-modern" value="${p.model}" data-sync="vid-model" data-index="${i}"></div>
+                <div class="form-group"><label>请求超时</label><input type="number" class="input-modern" value="${p.timeout}" data-sync="vid-time" data-index="${i}"></div>
+                <div class="form-group full-width"><label>API Keys</label><textarea class="input-modern" rows="2" data-sync="vid-keys" data-index="${i}">${p.api_keys}</textarea></div>
             </div>
         </div>
     `).join('');
-    document.getElementById("video-providers-container").innerHTML = html || '<div class="empty-tip">OFFLINE // 无视频渲染节点</div>';
+    document.getElementById("video-providers-container").innerHTML = html || '<div class="empty-tip">未配置视频节点</div>';
 }
 
 function setupEventDelegation() {
-    // 💡 彻底修复 Tab 切换失效问题，强制覆盖 DOM 操作
+    // 丝滑 Tab 切换
     document.body.addEventListener('click', (e) => {
         const navItem = e.target.closest('.nav-item');
         if (navItem) {
@@ -195,13 +199,15 @@ function setupEventDelegation() {
             navItem.classList.add('active');
             
             document.querySelectorAll('.tab-pane').forEach(pane => {
-                pane.style.display = 'none';
                 pane.classList.remove('active');
+                setTimeout(() => { if (!pane.classList.contains('active')) pane.style.display = 'none'; }, 200);
             });
             
             const targetPane = document.getElementById(targetId);
             targetPane.style.display = 'block';
-            setTimeout(() => targetPane.classList.add('active'), 20); // 确保动画触发
+            // 触发布局重绘以启动过渡动画
+            void targetPane.offsetWidth;
+            targetPane.classList.add('active');
             return;
         }
 
@@ -219,7 +225,8 @@ function setupEventDelegation() {
         if (action === 'del-video-provider') { state.video_providers.splice(idx, 1); renderVideoProviders(); }
     });
 
-    document.body.addEventListener('change', (e) => {
+    // 状态绑定
+    document.body.addEventListener('input', (e) => {
         const input = e.target;
         if (!input.hasAttribute('data-sync')) return;
         const sync = input.getAttribute('data-sync');
@@ -246,7 +253,7 @@ function setupEventDelegation() {
 async function saveConfig(btn) {
     btn.disabled = true;
     const originalText = btn.innerHTML;
-    btn.innerHTML = `<span class="animate-spin">⚙</span> SYNCING...`;
+    btn.innerHTML = `保存中...`;
 
     readBasicFields();
     const formattedPresets = state.presets.filter(p => p.name && p.prompt).map(p => `${p.name}:${p.prompt}`);
@@ -264,18 +271,18 @@ async function saveConfig(btn) {
     try {
         const result = await bridge.apiPost("save_config", payload);
         if (result.success) {
-            showToast("DATA_SYNCED // 配置已全息映射至底层", "success");
+            showToast("设置已保存并生效", "success");
         } else {
-            showToast("ERROR // 突发致命异常", "error");
+            showToast("保存失败，请检查数据", "error");
         }
     } catch (e) {
-        showToast("CONNECTION_LOST // 脑机接口断开", "error");
+        showToast("网络异常", "error");
     }
 
     setTimeout(() => {
         btn.disabled = false;
         btn.innerHTML = originalText;
-    }, 1000);
+    }, 800);
 }
 
 init();

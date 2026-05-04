@@ -4,7 +4,7 @@ let state = {
     permission_config: { allowed_users: "" },
     persona_config: { persona_name: "", persona_base_prompt: "", persona_ref_image: [] },
     optimizer_config: { enable_optimizer: true, optimizer_style: "", chain_optimizer: "", optimizer_model: "", optimizer_timeout: 15, max_batch_count: 0, optimizer_custom_prompt: "" },
-    router_config: { chain_text2img: "", chain_selfie: "", chain_video: "" },
+    router_config: { chain_text2img: "node_1", chain_selfie: "node_1", chain_video: "video_node_1" },
     presets: [], providers: [], video_providers: [], verbose_report: false
 };
 
@@ -13,7 +13,7 @@ function showToast(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.innerText = message;
-    container.appendChild(toast);
+    if(container) container.appendChild(toast);
     setTimeout(() => toast.remove(), 2500);
 }
 
@@ -24,7 +24,7 @@ function renderSelectors() {
         if (!container || !hiddenInput) return;
         const currentVal = hiddenInput.value;
         container.innerHTML = sourceList.map(node => {
-            const nodeId = node.id;
+            const nodeId = node.id || node['节点ID'];
             if(!nodeId) return '';
             return `<div class="selector-chip ${nodeId === currentVal ? 'active' : ''}" data-id="${nodeId}" data-input="${inputId}">${nodeId}</div>`;
         }).join('') || '<span class="empty-hint">请先在「算力集群」中配置并填写节点 ID</span>';
@@ -76,7 +76,7 @@ function renderProviders() {
                         `).join('')}
                     </div>
                     <div style="display:flex; gap:10px;">
-                        <input type="text" class="input-glass" id="new-model-img-${i}" placeholder="添加模型名称" style="flex:1;">
+                        <input type="text" class="input-glass" id="new-model-img-${i}" placeholder="模型名" style="flex:1;">
                         <button data-action="add-prov-model" data-index="${i}" class="btn-glass-secondary">添加</button>
                     </div>
                 </div>
@@ -115,7 +115,7 @@ function renderVideoProviders() {
                         `).join('')}
                     </div>
                     <div style="display:flex; gap:10px;">
-                        <input type="text" class="input-glass" id="new-model-vid-${i}" placeholder="添加视频模型" style="flex:1;">
+                        <input type="text" class="input-glass" id="new-model-vid-${i}" placeholder="模型名" style="flex:1;">
                         <button data-action="add-vid-model" data-index="${i}" class="btn-glass-secondary">添加</button>
                     </div>
                 </div>
@@ -143,7 +143,7 @@ async function init() {
     const context = await bridge.ready();
     const raw = await bridge.apiGet("get_config") || {};
     
-    // 数据回载逻辑
+    // 恢复 state 数据
     const perm = raw.permission_config || {};
     const pers = raw.persona_config || {};
     const opt = raw.optimizer_config || {};
@@ -179,21 +179,22 @@ async function init() {
     }));
     state.verbose_report = raw.verbose_report || false;
 
-    // 绑定基础字段到 UI
-    document.getElementById("perm_allowed_users").value = state.permission_config.allowed_users;
-    document.getElementById("persona_name").value = state.persona_config.persona_name;
-    document.getElementById("persona_prompt").value = state.persona_config.persona_base_prompt;
-    document.getElementById("route_img").value = state.router_config.chain_text2img;
-    document.getElementById("route_selfie").value = state.router_config.chain_selfie;
-    document.getElementById("route_video").value = state.router_config.chain_video;
-    document.getElementById("opt_enable").checked = state.optimizer_config.enable_optimizer;
-    document.getElementById("opt_style").value = state.optimizer_config.optimizer_style;
-    document.getElementById("opt_chain").value = state.optimizer_config.chain_optimizer;
-    document.getElementById("opt_model").value = state.optimizer_config.optimizer_model;
-    document.getElementById("opt_timeout").value = state.optimizer_config.optimizer_timeout;
-    document.getElementById("opt_batch").value = state.optimizer_config.max_batch_count;
-    document.getElementById("opt_custom").value = state.optimizer_config.optimizer_custom_prompt;
-    document.getElementById("verbose_report").checked = state.verbose_report;
+    // 💡 同步到 UI (增加 Null 保护)
+    const elId = (id) => document.getElementById(id);
+    if(elId("perm_allowed_users")) elId("perm_allowed_users").value = state.permission_config.allowed_users;
+    if(elId("persona_name")) elId("persona_name").value = state.persona_config.persona_name;
+    if(elId("persona_prompt")) elId("persona_prompt").value = state.persona_config.persona_base_prompt;
+    if(elId("route_img")) elId("route_img").value = state.router_config.chain_text2img;
+    if(elId("route_selfie")) elId("route_selfie").value = state.router_config.chain_selfie;
+    if(elId("route_video")) elId("route_video").value = state.router_config.chain_video;
+    if(elId("opt_enable")) elId("opt_enable").checked = state.optimizer_config.enable_optimizer;
+    if(elId("opt_style")) elId("opt_style").value = state.optimizer_config.optimizer_style;
+    if(elId("opt_chain")) elId("opt_chain").value = state.optimizer_config.chain_optimizer;
+    if(elId("opt_model")) elId("opt_model").value = state.optimizer_config.optimizer_model;
+    if(elId("opt_timeout")) elId("opt_timeout").value = state.optimizer_config.optimizer_timeout;
+    if(elId("opt_batch")) elId("opt_batch").value = state.optimizer_config.max_batch_count;
+    if(elId("opt_custom")) elId("opt_custom").value = state.optimizer_config.optimizer_custom_prompt;
+    if(elId("verbose_report")) elId("verbose_report").checked = state.verbose_report;
 
     renderProviders();
     renderVideoProviders();
@@ -207,86 +208,83 @@ function setupEventDelegation() {
     const fileInput = document.getElementById('hidden-file-input');
     
     document.body.addEventListener('click', (e) => {
-        const navItem = e.target.closest('.nav-item');
-        if (navItem) {
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            navItem.classList.add('active');
-            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-            document.getElementById(navItem.getAttribute('data-target')).classList.add('active');
-            return;
-        }
-
-        const chip = e.target.closest('.selector-chip');
-        if (chip) {
-            const inputId = chip.dataset.input;
-            if (inputId) {
-                document.getElementById(inputId).value = chip.dataset.id;
-                document.querySelectorAll(`.selector-chip[data-input="${inputId}"]`).forEach(c => c.classList.remove('active'));
-                chip.classList.add('active');
+        try {
+            const navItem = e.target.closest('.nav-item');
+            if (navItem) {
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                navItem.classList.add('active');
+                document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+                const target = document.getElementById(navItem.dataset.target);
+                if(target) target.classList.add('active');
+                return;
             }
-            return;
-        }
 
-        const apiChip = e.target.closest('.api-chip');
-        if (apiChip && !e.target.closest('.chip-del')) {
-            const sync = apiChip.dataset.sync;
-            const idx = parseInt(apiChip.dataset.index, 10);
-            const val = apiChip.dataset.val;
-            if (sync === 'prov-api') { state.providers[idx].api_type = val; renderProviders(); } 
-            else if (sync === 'vid-api') { state.video_providers[idx].api_type = val; renderVideoProviders(); }
-            else if (sync === 'prov-model-select') { state.providers[idx].model = val; renderProviders(); } 
-            else if (sync === 'vid-model-select') { state.video_providers[idx].model = val; renderVideoProviders(); }
-            return;
-        }
+            const chip = e.target.closest('.selector-chip');
+            if (chip) {
+                const inputId = chip.dataset.input;
+                const hiddenInput = document.getElementById(inputId);
+                if (hiddenInput) {
+                    hiddenInput.value = chip.dataset.id;
+                    document.querySelectorAll(`.selector-chip[data-input="${inputId}"]`).forEach(c => c.classList.remove('active'));
+                    chip.classList.add('active');
+                }
+                return;
+            }
 
-        if (e.target.closest('#persona-upload-trigger')) fileInput.click();
+            const apiChip = e.target.closest('.api-chip');
+            if (apiChip && !e.target.closest('.chip-del')) {
+                const sync = apiChip.dataset.sync;
+                const idx = parseInt(apiChip.dataset.index, 10);
+                const val = apiChip.dataset.val;
+                if (sync === 'prov-api') { state.providers[idx].api_type = val; renderProviders(); } 
+                else if (sync === 'vid-api') { state.video_providers[idx].api_type = val; renderVideoProviders(); }
+                else if (sync === 'prov-model-select') { state.providers[idx].model = val; renderProviders(); } 
+                else if (sync === 'vid-model-select') { state.video_providers[idx].model = val; renderVideoProviders(); }
+                return;
+            }
 
-        const btn = e.target.closest('button[data-action], span[data-action]');
-        if (!btn) return;
-        const act = btn.getAttribute('data-action');
-        const idx = parseInt(btn.getAttribute('data-index'), 10);
+            if (e.target.closest('#persona-upload-trigger') && fileInput) fileInput.click();
 
-        if (act === 'save-config') saveConfig(btn);
-        if (act === 'add-preset') { state.presets.push({name:"", prompt:""}); renderPresets(); }
-        if (act === 'del-preset') { state.presets.splice(idx, 1); renderPresets(); }
-        if (act === 'add-provider') { state.providers.push({id:`node_${state.providers.length+1}`, api_type:"openai_image", base_url:"", model:"", available_models:[], api_keys:"", timeout:60}); renderProviders(); renderSelectors(); }
-        if (act === 'del-provider') { state.providers.splice(idx, 1); renderProviders(); renderSelectors(); }
-        if (act === 'add-video-provider') { state.video_providers.push({id:`v_node_${state.video_providers.length+1}`, api_type:"async_task", base_url:"", model:"", available_models:[], api_keys:"", timeout:300}); renderVideoProviders(); renderSelectors(); }
-        if (act === 'del-video-provider') { state.video_providers.splice(idx, 1); renderVideoProviders(); renderSelectors(); }
-        if (act === 'del-persona-img') { state.persona_config.persona_ref_image.splice(idx, 1); renderPersonaImages(); }
+            const btn = e.target.closest('button[data-action], span[data-action]');
+            if (!btn) return;
+            const act = btn.getAttribute('data-action');
+            const idx = parseInt(btn.getAttribute('data-index'), 10);
 
-        if (act === 'add-prov-model') {
-            const input = document.getElementById(`new-model-img-${idx}`);
-            const newM = input.value.trim();
-            if(newM) { state.providers[idx].available_models.push(newM); if(!state.providers[idx].model) state.providers[idx].model = newM; renderProviders(); }
-        }
-        if (act === 'add-vid-model') {
-            const input = document.getElementById(`new-model-vid-${idx}`);
-            const newM = input.value.trim();
-            if(newM) { state.video_providers[idx].available_models.push(newM); if(!state.video_providers[idx].model) state.video_providers[idx].model = newM; renderVideoProviders(); }
-        }
-        if (act === 'del-prov-model') {
-            const mIdx = parseInt(btn.dataset.midx, 10);
-            state.providers[idx].available_models.splice(mIdx, 1);
-            renderProviders();
-        }
-        if (act === 'del-vid-model') {
-            const mIdx = parseInt(btn.dataset.midx, 10);
-            state.video_providers[idx].available_models.splice(mIdx, 1);
-            renderVideoProviders();
-        }
+            if (act === 'save-config') saveConfig(btn);
+            if (act === 'add-preset') { state.presets.push({name:"", prompt:""}); renderPresets(); }
+            if (act === 'del-preset') { state.presets.splice(idx, 1); renderPresets(); }
+            if (act === 'add-provider') { state.providers.push({id:`node_${state.providers.length+1}`, api_type:"openai_image", base_url:"", model:"", available_models:[], api_keys:"", timeout:60}); renderProviders(); renderSelectors(); }
+            if (act === 'del-provider') { state.providers.splice(idx, 1); renderProviders(); renderSelectors(); }
+            if (act === 'add-video-provider') { state.video_providers.push({id:`v_node_${state.video_providers.length+1}`, api_type:"async_task", base_url:"", model:"", available_models:[], api_keys:"", timeout:300}); renderVideoProviders(); renderSelectors(); }
+            if (act === 'del-video-provider') { state.video_providers.splice(idx, 1); renderVideoProviders(); renderSelectors(); }
+            if (act === 'del-persona-img') { state.persona_config.persona_ref_image.splice(idx, 1); renderPersonaImages(); }
+
+            if (act === 'add-prov-model') {
+                const input = document.getElementById(`new-model-img-${idx}`);
+                const newM = input.value.trim();
+                if(newM) { state.providers[idx].available_models.push(newM); if(!state.providers[idx].model) state.providers[idx].model = newM; renderProviders(); }
+            }
+            if (act === 'add-vid-model') {
+                const input = document.getElementById(`new-model-vid-${idx}`);
+                const newM = input.value.trim();
+                if(newM) { state.video_providers[idx].available_models.push(newM); if(!state.video_providers[idx].model) state.video_providers[idx].model = newM; renderVideoProviders(); }
+            }
+            if (act === 'del-prov-model') { e.stopPropagation(); const midx = parseInt(btn.dataset.midx, 10); state.providers[idx].available_models.splice(midx, 1); renderProviders(); }
+            if (act === 'del-vid-model') { e.stopPropagation(); const midx = parseInt(btn.dataset.midx, 10); state.video_providers[idx].available_models.splice(midx, 1); renderVideoProviders(); }
+        } catch(err) { console.error("Event Delegation Error:", err); }
     });
 
-    fileInput.addEventListener('change', function(e) {
-        Array.from(e.target.files).forEach(file => {
-            const reader = new FileReader();
-            reader.onload = (evt) => { state.persona_config.persona_ref_image.push(evt.target.result); renderPersonaImages(); };
-            reader.readAsDataURL(file);
+    if(fileInput) {
+        fileInput.addEventListener('change', function(e) {
+            Array.from(e.target.files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (evt) => { state.persona_config.persona_ref_image.push(evt.target.result); renderPersonaImages(); };
+                reader.readAsDataURL(file);
+            });
+            fileInput.value = '';
         });
-        fileInput.value = '';
-    });
+    }
 
-    // 💡 同步 input 标识符
     document.body.addEventListener('input', (e) => {
         const input = e.target;
         const s = input.dataset.sync;
@@ -311,39 +309,42 @@ async function saveConfig(btn) {
     const oldText = btn.innerText;
     btn.innerText = "部署中...";
     
-    // 强制刷新 state 中的基础配置
-    state.permission_config.allowed_users = document.getElementById("perm_allowed_users").value;
-    state.persona_config.persona_name = document.getElementById("persona_name").value;
-    state.persona_config.persona_base_prompt = document.getElementById("persona_prompt").value;
-    state.optimizer_config.enable_optimizer = document.getElementById("opt_enable").checked;
-    state.optimizer_config.optimizer_style = document.getElementById("opt_style").value;
-    state.optimizer_config.chain_optimizer = document.getElementById("opt_chain").value;
-    state.optimizer_config.optimizer_model = document.getElementById("opt_model").value;
-    state.optimizer_config.optimizer_timeout = parseFloat(document.getElementById("opt_timeout").value);
-    state.optimizer_config.max_batch_count = parseInt(document.getElementById("opt_batch").value);
-    state.optimizer_config.optimizer_custom_prompt = document.getElementById("opt_custom").value;
-    state.verbose_report = document.getElementById("verbose_report").checked;
-
-    const payload = {
-        permission_config: state.permission_config,
-        persona_config: state.persona_config,
-        optimizer_config: state.optimizer_config,
-        router_config: {
-            chain_text2img: document.getElementById("route_img").value,
-            chain_selfie: document.getElementById("route_selfie").value,
-            chain_video: document.getElementById("route_video").value
-        },
-        presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`),
-        providers: state.providers,
-        video_providers: state.video_providers,
-        verbose_report: state.verbose_report
-    };
-
     try {
+        // 读取所有当前 UI 字段
+        const elVal = (id) => document.getElementById(id) ? document.getElementById(id).value : "";
+        const elCheck = (id) => document.getElementById(id) ? document.getElementById(id).checked : false;
+
+        state.permission_config.allowed_users = elVal("perm_allowed_users");
+        state.persona_config.persona_name = elVal("persona_name");
+        state.persona_config.persona_base_prompt = elVal("persona_prompt");
+        state.optimizer_config.enable_optimizer = elCheck("opt_enable");
+        state.optimizer_config.optimizer_style = elVal("opt_style");
+        state.optimizer_config.chain_optimizer = elVal("opt_chain");
+        state.optimizer_config.optimizer_model = elVal("opt_model");
+        state.optimizer_config.optimizer_timeout = parseFloat(elVal("opt_timeout")) || 15;
+        state.optimizer_config.max_batch_count = parseInt(elVal("opt_batch")) || 0;
+        state.optimizer_config.optimizer_custom_prompt = elVal("opt_custom");
+        state.verbose_report = elCheck("verbose_report");
+
+        const payload = {
+            permission_config: state.permission_config,
+            persona_config: state.persona_config,
+            optimizer_config: state.optimizer_config,
+            router_config: {
+                chain_text2img: elVal("route_img"),
+                chain_selfie: elVal("route_selfie"),
+                chain_video: elVal("route_video")
+            },
+            presets: state.presets.filter(p=>p.name).map(p=>`${p.name}:${p.prompt}`),
+            providers: state.providers,
+            video_providers: state.video_providers,
+            verbose_report: state.verbose_report
+        };
+
         const res = await bridge.apiPost("save_config", payload);
         if (res.success) showToast("部署成功！");
         else showToast("保存失败", "error");
-    } catch(e) { showToast("连接超时", "error"); }
+    } catch(e) { console.error(e); showToast("脚本错误", "error"); }
     btn.disabled = false;
     btn.innerText = oldText;
 }

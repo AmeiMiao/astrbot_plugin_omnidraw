@@ -2,6 +2,7 @@
 AstrBot 万象画卷插件 v3.1
 功能：支持 Gemini / gptimage2 高阶参数动态透传。
 优化：极简用户交互，移除冗长的生图参数汇报，保持群聊清爽。
+新增：基于 Plugin Pages 的前端 WebUI API 支持与配置热重载。
 """
 import os
 import base64
@@ -11,6 +12,9 @@ import aiohttp
 import asyncio
 import re
 from typing import AsyncGenerator, Any
+
+# 🚀 新增：引入 Quart 处理前端 Pages 的 Web API 请求
+from quart import jsonify, request
 
 try:
     from astrbot.api.star import Context, Star, register, StarTools 
@@ -44,12 +48,61 @@ class OmniDrawPlugin(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
         self.data_dir = str(StarTools.get_data_dir())
-        self.plugin_config = PluginConfig.from_dict(config or {}, self.data_dir)
+        
+        # 保存一份原始字典以便给前端传输
+        self.raw_config = config or {}
+        
+        self.plugin_config = PluginConfig.from_dict(self.raw_config, self.data_dir)
         self.cmd_parser = CommandParser()
         self.persona_manager = PersonaManager(self.plugin_config)
         self.video_manager = VideoManager(self.plugin_config)
         self.prompt_optimizer = PromptOptimizer(self.plugin_config) 
 
+        # 🌐 注册 WebUI Pages API
+        self.context.register_web_api(
+            "/astrbot_plugin_omnidraw/get_config",
+            self.get_config_handler,
+            ["GET"],
+            "获取万象画卷完整配置"
+        )
+        self.context.register_web_api(
+            "/astrbot_plugin_omnidraw/save_config",
+            self.save_config_handler,
+            ["POST"],
+            "保存万象画卷配置"
+        )
+
+    # ==========================================
+    # 🌐 WebUI Pages 接口处理区
+    # ==========================================
+    async def get_config_handler(self):
+        """响应前端的获取配置请求"""
+        return jsonify(self.raw_config)
+
+    async def save_config_handler(self):
+        """响应前端的保存配置请求并实现热重载"""
+        new_config = await request.get_json()
+        
+        # 1. 更新内存中的原始配置字典
+        self.raw_config = new_config
+        
+        # 2. 热重载配置模型
+        self.plugin_config = PluginConfig.from_dict(new_config, self.data_dir)
+        
+        # 3. 实时重新实例化各核心组件（避免重启插件）
+        self.persona_manager = PersonaManager(self.plugin_config)
+        self.video_manager = VideoManager(self.plugin_config)
+        self.prompt_optimizer = PromptOptimizer(self.plugin_config)
+        
+        # 4. 尝试利用 AstrBot 内置方法持久化
+        if hasattr(self.context, 'update_config'):
+            self.context.update_config(new_config)
+            
+        return jsonify({"success": True, "message": "配置已保存，并在内存中热重载生效！"})
+
+    # ==========================================
+    # 原有核心逻辑区 (无删改)
+    # ==========================================
     def _get_event_images(self, event: AstrMessageEvent) -> list:
         images = []
         visited = set()
@@ -327,9 +380,6 @@ class OmniDrawPlugin(Star):
             logger.error(f"预设生图失败: {e}")
             yield event.plain_result(f"💥 绘制失败: {e}")
 
-    # ==========================================
-    # 常规指令区 (精简文案版)
-    # ==========================================
     @filter.command("画")
     @handle_errors
     async def cmd_draw(self, event: AstrMessageEvent, p1: str="", p2: str="", p3: str="", p4: str="", p5: str="", p6: str="", p7: str="", p8: str="", p9: str="", p10: str="") -> AsyncGenerator[Any, None]:
@@ -350,7 +400,7 @@ class OmniDrawPlugin(Star):
         if safe_refs:
             kwargs["user_refs"] = safe_refs
             
-        # 🚀 极致精简：不再输出长串的参数和提示词，只保留提示音
+        # 🚀 极致精简
         yield event.plain_result(f"{MessageEmoji.PAINTING} 收到灵感，正在绘制...")
         
         async with aiohttp.ClientSession() as session:

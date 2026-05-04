@@ -1,7 +1,7 @@
 """
 AstrBot 万象画卷插件 v3.1
 功能：支持 Gemini / gptimage2 高阶参数动态透传。
-优化：完美的多模态图片解析，规避所有数组冲突。内置开发者详细汇报模式。
+优化：完美的多模态图片解析，规避所有数组冲突。内置开发者详细汇报模式。包含完整控制指令。
 """
 import os
 import base64
@@ -169,6 +169,22 @@ class OmniDrawPlugin(Star):
             return Image.fromFileSystem(file_path)
         return Image.fromURL(image_url)
 
+    def _get_active_provider(self, chain_type: str = "text2img"):
+        chain = self.plugin_config.chains.get(chain_type, [])
+        if chain_type == "video":
+            if chain: 
+                prov = self.plugin_config.get_video_provider(chain[0])
+                if prov: return prov
+            return self.plugin_config.video_providers[0] if self.plugin_config.video_providers else None
+        else:
+            if chain: 
+                prov = self.plugin_config.get_provider(chain[0])
+                if prov: return prov
+            return self.plugin_config.providers[0] if self.plugin_config.providers else None
+
+    # ==========================================
+    # 🌟 指令恢复区 
+    # ==========================================
     @filter.command("万象帮助")
     @handle_errors
     async def cmd_help(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
@@ -177,6 +193,83 @@ class OmniDrawPlugin(Star):
             msg += "✨ 极速宏:\n" + "\n".join([f"/{p}" for p in self.plugin_config.presets.keys()])
         yield event.plain_result(msg)
 
+    @filter.command("切换链路")
+    @handle_errors
+    async def cmd_switch_chain(self, event: AstrMessageEvent, target: str, node_id: str) -> AsyncGenerator[Any, None]:
+        if not self._has_permission(event): return
+        target_map = {"画图": "text2img", "自拍": "selfie", "视频": "video", "副脑": "optimizer"}
+        if target not in target_map:
+            yield event.plain_result(f"{MessageEmoji.WARNING} 未知目标！支持: 画图/自拍/视频/副脑")
+            return
+        chain_key = target_map[target]
+        
+        if chain_key == "video": prov = self.plugin_config.get_video_provider(node_id)
+        else: prov = self.plugin_config.get_provider(node_id)
+            
+        if not prov:
+            yield event.plain_result(f"{MessageEmoji.WARNING} 找不到节点 ID: {node_id}")
+            return
+            
+        self.plugin_config.chains[chain_key] = [node_id]
+        self.raw_config.setdefault("router_config", {})[f"chain_{chain_key}"] = node_id
+        if hasattr(self.context, 'update_config'):
+            self.context.update_config(self.raw_config)
+        yield event.plain_result(f"{MessageEmoji.SUCCESS} 已将 {target} 链路切换至节点: {node_id}")
+
+    @filter.command("切换模型")
+    @handle_errors
+    async def cmd_switch_model(self, event: AstrMessageEvent, target: str, model_idx: str = "") -> AsyncGenerator[Any, None]:
+        if not self._has_permission(event): return
+        target_map = {"画图": "text2img", "自拍": "selfie", "视频": "video"}
+        if target not in target_map:
+            yield event.plain_result(f"{MessageEmoji.WARNING} 未知目标！支持: 画图/自拍/视频")
+            return
+            
+        chain_key = target_map[target]
+        prov = self._get_active_provider(chain_key)
+        if not prov:
+            yield event.plain_result(f"{MessageEmoji.WARNING} 当前 {target} 链路没有可用的节点配置")
+            return
+            
+        models = prov.available_models
+        if not models:
+            yield event.plain_result(f"{MessageEmoji.WARNING} 当前节点 ({prov.id}) 未配置可选模型列表 (以逗号分隔)")
+            return
+            
+        if not model_idx:
+            msg = f"🎛️ 节点 {prov.id} 的可用模型:\n"
+            for i, m in enumerate(models):
+                marker = "👉" if m == prov.model else "  "
+                msg += f"{marker} [{i}] {m}\n"
+            msg += "\n请使用 /切换模型 [目标] [序号] 来选择"
+            yield event.plain_result(msg)
+            return
+            
+        try:
+            idx = int(model_idx)
+            if idx < 0 or idx >= len(models): raise ValueError
+        except:
+            yield event.plain_result(f"{MessageEmoji.WARNING} 序号无效")
+            return
+            
+        selected_model = models[idx]
+        prov.model = selected_model
+        
+        prov_list_key = "video_providers" if chain_key == "video" else "providers"
+        for p_dict in self.raw_config.get(prov_list_key, []):
+            p_id = p_dict.get("id") or p_dict.get("节点ID")
+            if p_id == prov.id:
+                p_dict["model"] = selected_model
+                p_dict["模型名称"] = selected_model
+                break
+                
+        if hasattr(self.context, 'update_config'):
+            self.context.update_config(self.raw_config)
+        yield event.plain_result(f"{MessageEmoji.SUCCESS} 已将 {target} 节点 ({prov.id}) 的模型切换为: {selected_model}")
+
+    # ==========================================
+    # 🎨 生成指令区 
+    # ==========================================
     @filter.event_message_type(EventMessageType.ALL)
     async def on_message_preset(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
         if not self.plugin_config.presets: return
@@ -196,7 +289,6 @@ class OmniDrawPlugin(Star):
         preset_prompt = self.plugin_config.presets[cmd_name]
         safe_refs = await self._process_and_save_images(raw_refs)
         
-        # 💡 详细汇报开关逻辑
         msg = f"{MessageEmoji.PAINTING} 收到灵感，正在绘制..."
         if self.plugin_config.verbose_report:
             msg += f"\n[调试] 宏对应提示词: {preset_prompt}\n[调试] 识别参考图: {len(safe_refs) if safe_refs else 0}张"
@@ -224,7 +316,6 @@ class OmniDrawPlugin(Star):
         prompt, kwargs = self.cmd_parser.parse(message)
         if safe_refs: kwargs["user_refs"] = safe_refs
             
-        # 💡 详细汇报开关逻辑
         msg = f"{MessageEmoji.PAINTING} 收到灵感，正在绘制..."
         if self.plugin_config.verbose_report:
             msg += f"\n[调试] 最终提示词: {prompt}\n[调试] 透传参数: {len(kwargs)}个\n[调试] 识别参考图: {len(safe_refs) if safe_refs else 0}张"
@@ -257,7 +348,6 @@ class OmniDrawPlugin(Star):
             if not raw_refs: extra_kwargs.pop("persona_ref", None)
         else: extra_kwargs.pop("user_refs", None)
             
-        # 💡 详细汇报开关逻辑
         msg = f"{MessageEmoji.INFO} 正在为「{self.plugin_config.persona_name}」生成自拍，请稍候..."
         if self.plugin_config.verbose_report:
             msg += f"\n[调试] 构建提示词: {final_prompt}\n[调试] 透传参数: {len(extra_kwargs)}个\n[调试] 识别参考图: {len(safe_refs) if safe_refs else 0}张"
@@ -279,7 +369,6 @@ class OmniDrawPlugin(Star):
         prompt, _ = self.cmd_parser.parse(message)
         safe_refs = await self._process_and_save_images(raw_refs)
         
-        # 💡 详细汇报开关逻辑
         msg = f"{MessageEmoji.INFO} 视频任务已提交后台渲染..."
         if self.plugin_config.verbose_report:
             msg += f"\n[调试] 渲染提示词: {prompt}\n[调试] 识别首尾帧/参考图: {len(safe_refs) if safe_refs else 0}张"
@@ -287,6 +376,9 @@ class OmniDrawPlugin(Star):
         
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
+    # ==========================================
+    # 🤖 LLM 工具区 
+    # ==========================================
     @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str, count: int = 1, aspect_ratio: str = "", size: str = "") -> str:
         """

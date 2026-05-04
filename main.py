@@ -10,7 +10,7 @@ import time
 import aiohttp
 import asyncio
 import re
-import json  # 💡 新增：用于彻底持久化落盘
+import json  # 💡 用于彻底持久化落盘
 from typing import AsyncGenerator, Any
 
 from quart import jsonify, request
@@ -413,12 +413,18 @@ class OmniDrawPlugin(Star):
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
     # ==========================================
-    # 🤖 LLM 工具区 
+    # 🤖 LLM 工具区 (💡全部恢复了带有详细注释的参数定义)
     # ==========================================
     @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str, count: int = 1, aspect_ratio: str = "", size: str = "", extra_params: str = "") -> str:
         """
         以此 AI 助理的固定人设拍摄自拍。
+        Args:
+            action (string): 动作和场景描述。
+            count (int): 需要生成的图片数量。默认为1。
+            aspect_ratio (string): 宽高比例。
+            size (string): 分辨率。
+            extra_params (string): 附加模型参数透传。
         """
         if not self._has_permission(event): return "无权限调用。"
         try:
@@ -461,7 +467,13 @@ class OmniDrawPlugin(Star):
     @llm_tool(name="generate_image")
     async def tool_generate_image(self, event: AstrMessageEvent, prompt: str, count: int = 1, aspect_ratio: str = "", size: str = "", extra_params: str = "") -> str:
         """
-        AI 画图工具。
+        AI 画图工具。当用户提出明确的画面要求你画出来时调用此工具。
+        Args:
+            prompt (string): 提示词。
+            count (int): 图片数量。默认为1。
+            aspect_ratio (string): 宽高比例。
+            size (string): 分辨率。
+            extra_params (string): 其他参数。
         """
         if not self._has_permission(event): return "无权限调用。"
         try:
@@ -494,7 +506,13 @@ class OmniDrawPlugin(Star):
     @llm_tool(name="generate_video")
     async def tool_generate_video(self, event: AstrMessageEvent, prompt: str, count: int = 1, aspect_ratio: str = "", size: str = "", extra_params: str = "") -> str:
         """
-        AI 视频生成工具。
+        AI 视频生成工具。当用户要求生成一段视频时调用。
+        Args:
+            prompt (string): 视频提示词。
+            count (int): 视频数量，默认为 1。
+            aspect_ratio (string): 宽高比例。
+            size (string): 分辨率。
+            extra_params (string): 附加参数，透传至底层引擎。
         """
         if not self._has_permission(event): return "无权限调用。"
         try:

@@ -33,7 +33,20 @@
       "chain_optimizer": { "description": "执行链路", "hint": "调用哪个节点来扩写提示词", "type": "string", "default": "node_1" },
       "optimizer_model": { "description": "指定模型", "hint": "推荐极速模型，如 gpt-4o-mini", "type": "string", "default": "gpt-4o-mini" },
       "optimizer_timeout": { "description": "超时时间 (秒)", "hint": "建议 8~15 秒", "type": "string", "default": "15" },
-      "max_batch_count": { "type": "int", "description": "批量生成数量上限", "hint": "0 表示无上限。防止大模型胡乱调用耗尽余额。", "default": 0 }
+      "max_batch_count": { "type": "int", "description": "批量生成数量上限", "hint": "0 表示无上限。防止大模型胡乱调用耗尽余额。", "default": 0 },
+      "optimizer_style": {
+        "type": "string",
+        "description": "✨ 副脑预设画风",
+        "hint": "选择副脑优化的底层框架风格",
+        "options": ["手机日常原生感", "电影级光影大片", "日系插画大师", "3D 潮玩盲盒", "自定义模式"],
+        "default": "手机日常原生感"
+      },
+      "optimizer_custom_prompt": {
+        "type": "text",
+        "description": "✍️ 自定义副脑提示词",
+        "hint": "仅在上方选择【自定义模式】时生效。请用大白话输入你期望的光影、画风或镜头要求。",
+        "default": ""
+      }
     },
     "default": {}
   },

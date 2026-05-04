@@ -1,7 +1,7 @@
 """
 AstrBot 万象画卷插件 v3.1
 功能：支持 Gemini / gptimage2 高阶参数动态透传。
-优化：极简用户交互，包含插件 Pages 的前端 WebUI API 支持与热重载。
+优化：完美的多模态图片解析，规避所有数组冲突。
 """
 import os
 import base64
@@ -119,7 +119,6 @@ class OmniDrawPlugin(Star):
             for img_ref in raw_images:
                 if not img_ref: continue
                 
-                # 处理 Base64 直传图
                 if str(img_ref).startswith("data:image"):
                     try:
                         b64_data = img_ref.split(",", 1)[1]
@@ -169,19 +168,6 @@ class OmniDrawPlugin(Star):
             with open(file_path, "wb") as f: f.write(base64.b64decode(b64_data))
             return Image.fromFileSystem(file_path)
         return Image.fromURL(image_url)
-
-    def _get_active_provider(self, chain_type: str = "text2img"):
-        chain = self.plugin_config.chains.get(chain_type, [])
-        if chain_type == "video":
-            if chain: 
-                prov = self.plugin_config.get_video_provider(chain[0])
-                if prov: return prov
-            return self.plugin_config.video_providers[0] if self.plugin_config.video_providers else None
-        else:
-            if chain: 
-                prov = self.plugin_config.get_provider(chain[0])
-                if prov: return prov
-            return self.plugin_config.providers[0] if self.plugin_config.providers else None
 
     @filter.command("万象帮助")
     @handle_errors
@@ -251,11 +237,8 @@ class OmniDrawPlugin(Star):
         final_prompt, extra_kwargs = self.persona_manager.build_persona_prompt(opt_actions[0] if opt_actions else user_input)
         extra_kwargs.update(kwargs)
         
-        # 🚀 安全处理数组参考图
-        persona_ref = extra_kwargs.get("persona_ref", [])
-        if isinstance(persona_ref, str) and persona_ref: persona_ref = [persona_ref]
-        elif not isinstance(persona_ref, list): persona_ref = []
-        
+        # 💡 使用安全映射的多图数组
+        persona_ref = self.plugin_config.persona_ref_images
         raw_refs = self._get_event_images(event)
         target_refs = raw_refs if raw_refs else persona_ref
         
@@ -284,9 +267,6 @@ class OmniDrawPlugin(Star):
         yield event.plain_result(f"{MessageEmoji.INFO} 视频任务已提交后台渲染...")
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
-    # ==========================================
-    # 🤖 LLM 工具区 
-    # ==========================================
     @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str, count: int = 1, aspect_ratio: str = "", size: str = "") -> str:
         """
@@ -294,8 +274,8 @@ class OmniDrawPlugin(Star):
         Args:
             action (string): 动作和场景描述。
             count (int): 需要生成的图片数量。默认为1。
-            aspect_ratio (string): 宽高比例，如 "16:9", "1:1", "9:16"。
-            size (string): 分辨率，如 "1024x1024"。
+            aspect_ratio (string): 宽高比例。
+            size (string): 分辨率。
         """
         if not self._has_permission(event): return "系统提示：无权限调用。"
         try:
@@ -303,11 +283,8 @@ class OmniDrawPlugin(Star):
             logger.info(f"📸 [LLM] 发起 {count} 张自拍。")
             optimized_actions = await self.prompt_optimizer.optimize(action, count)
             
-            # 🚀 安全处理数组参考图
-            persona_ref = self.plugin_config.persona_ref_image
-            if isinstance(persona_ref, str) and persona_ref: persona_ref = [persona_ref]
-            elif not isinstance(persona_ref, list): persona_ref = []
-            
+            # 💡 完美闭环的多图传递
+            persona_ref = self.plugin_config.persona_ref_images
             raw_refs = self._get_event_images(event)
             target_refs = raw_refs if raw_refs else persona_ref
             safe_refs = await self._process_and_save_images(target_refs)
@@ -329,7 +306,7 @@ class OmniDrawPlugin(Star):
                 results = await asyncio.gather(*tasks, return_exceptions=True)
             
             valid_urls = [u for u in results if isinstance(u, str) and u]
-            if not valid_urls: raise Exception("渲染失败")
+            if not valid_urls: raise Exception("所有绘图节点请求失败")
             for url in valid_urls:
                 await event.send(event.chain_result([self._create_image_component(url)]))
                 await asyncio.sleep(0.5) 
@@ -346,7 +323,7 @@ class OmniDrawPlugin(Star):
             count (int): 图片数量。默认为1。
             aspect_ratio (string): 宽高比例。
             size (string): 分辨率。
-            extra_params (string): 其他参数。以 "--key value" 格式拼合。
+            extra_params (string): 其他参数。
         """
         if not self._has_permission(event): return "无权限调用。"
         try:
@@ -367,13 +344,13 @@ class OmniDrawPlugin(Star):
                 results = await asyncio.gather(*tasks, return_exceptions=True)
                 
             valid_urls = [u for u in results if isinstance(u, str) and u]
-            if not valid_urls: raise Exception("渲染失败")
+            if not valid_urls: raise Exception("所有绘图节点请求失败")
             for url in valid_urls:
                 await event.send(event.chain_result([self._create_image_component(url)]))
                 await asyncio.sleep(0.5) 
             return f"系统提示：已成功下发 {len(valid_urls)} 张图。请自然回复。"
         except Exception as e:
-            return f"系统提示：失败 ({str(e)})。"
+            return f"系统提示：画图失败 ({str(e)})。"
 
     @llm_tool(name="generate_video")
     async def tool_generate_video(self, event: AstrMessageEvent, prompt: str, count: int = 1) -> str:

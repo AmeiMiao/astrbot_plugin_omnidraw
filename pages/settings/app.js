@@ -1,66 +1,77 @@
 const bridge = window.AstrBotPluginPage;
 
-// 全局状态管理
 let state = {
-    permission_config: {},
-    persona_config: {},
-    optimizer_config: {},
-    router_config: {},
-    presets: [],
-    providers: [],
-    video_providers: []
+    permission_config: {}, persona_config: {}, optimizer_config: {}, router_config: {},
+    presets: [], providers: [], video_providers: []
 };
 
-// 工具：安全获取对象属性
 const getVal = (obj, key, def = "") => (obj && obj[key] !== undefined) ? obj[key] : def;
+
+// 🟢 动画提示框 (Toast)
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<span class="icon">${type === 'success' ? '✅' : '❌'}</span><span>${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => { toast.classList.add('toast-fadeout'); }, 2500);
+    setTimeout(() => { toast.remove(); }, 2800);
+}
 
 async function init() {
     const context = await bridge.ready();
-    console.log("万象画卷 WebUI 就绪", context);
-    
     const rawConfig = await bridge.apiGet("get_config");
     
-    // 合并初始数据
+    // 💡 智能迁移配置：如果读取到了旧数据，完美合并
     state.permission_config = rawConfig.permission_config || {};
     state.persona_config = rawConfig.persona_config || {};
     state.optimizer_config = rawConfig.optimizer_config || {};
     state.router_config = rawConfig.router_config || {};
     
-    // 预设处理 (将 "名称:提示词" 拆分为对象以便UI编辑)
+    // 解析旧版预设数组
     const rawPresets = rawConfig.presets || [];
     state.presets = rawPresets.map(p => {
-        const parts = p.split(/:(.+)/); // 仅以第一个冒号分割
-        return { name: parts[0] || "", prompt: parts[1] || "" };
+        if(typeof p === 'string') {
+            const parts = p.split(/:(.+)/);
+            return { name: parts[0] || "", prompt: parts[1] || "" };
+        }
+        return p;
     });
 
-    // 节点直接映射 (丢弃以前繁琐的中文Key，直接使用英文标准键名)
-    state.providers = rawConfig.providers || [];
-    state.video_providers = rawConfig.video_providers || [];
+    // 💡 终极旧版映射引擎：兼容旧版带有“中文键名”的数据
+    state.providers = (rawConfig.providers || []).map(p => ({
+        id: p.id || p['节点ID'] || '',
+        api_type: p.api_type || p['接口模式'] || 'openai_image',
+        base_url: p.base_url || p['接口地址 (需含/v1)'] || 'https://api.openai.com/v1',
+        model: p.model || p['模型名称'] || '',
+        timeout: p.timeout || p['超时时间(秒)'] || 60,
+        api_keys: Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || p['API密钥'] || '')
+    }));
+
+    state.video_providers = (rawConfig.video_providers || []).map(p => ({
+        id: p.id || p['节点ID'] || '',
+        api_type: p.api_type || p['接口模式'] || 'async_task (异步排队轮询/videos/generations)',
+        base_url: p.base_url || p['接口地址 (需含/v1或/v2)'] || p['接口地址 (需含/v1)'] || '',
+        model: p.model || p['模型名称'] || '',
+        timeout: p.timeout || p['超时时间(秒)'] || 300,
+        api_keys: Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || p['API密钥'] || '')
+    }));
 
     bindBasicFields();
     renderPresets();
     renderProviders();
     renderVideoProviders();
-
-    // 绑定保存按钮
-    document.getElementById("save-btn").addEventListener("click", saveConfig);
+    setupEventDelegation();
 }
 
 function bindBasicFields() {
-    // 权限
     document.getElementById("perm_allowed_users").value = getVal(state.permission_config, "allowed_users");
-    
-    // 路由
     document.getElementById("route_img").value = getVal(state.router_config, "chain_text2img", "node_1");
     document.getElementById("route_selfie").value = getVal(state.router_config, "chain_selfie", "node_1");
     document.getElementById("route_video").value = getVal(state.router_config, "chain_video", "video_node_1");
-
-    // 人设
     document.getElementById("persona_name").value = getVal(state.persona_config, "persona_name", "默认助理");
     document.getElementById("persona_prompt").value = getVal(state.persona_config, "persona_base_prompt");
     document.getElementById("persona_ref").value = getVal(state.persona_config, "persona_ref_image");
-
-    // 副脑
     document.getElementById("opt_enable").checked = getVal(state.optimizer_config, "enable_optimizer", true);
     document.getElementById("opt_style").value = getVal(state.optimizer_config, "optimizer_style", "手机日常原生感");
     document.getElementById("opt_chain").value = getVal(state.optimizer_config, "chain_optimizer", "node_1");
@@ -72,15 +83,12 @@ function bindBasicFields() {
 
 function readBasicFields() {
     state.permission_config.allowed_users = document.getElementById("perm_allowed_users").value;
-    
     state.router_config.chain_text2img = document.getElementById("route_img").value;
     state.router_config.chain_selfie = document.getElementById("route_selfie").value;
     state.router_config.chain_video = document.getElementById("route_video").value;
-
     state.persona_config.persona_name = document.getElementById("persona_name").value;
     state.persona_config.persona_base_prompt = document.getElementById("persona_prompt").value;
     state.persona_config.persona_ref_image = document.getElementById("persona_ref").value;
-
     state.optimizer_config.enable_optimizer = document.getElementById("opt_enable").checked;
     state.optimizer_config.optimizer_style = document.getElementById("opt_style").value;
     state.optimizer_config.chain_optimizer = document.getElementById("opt_chain").value;
@@ -90,120 +98,125 @@ function readBasicFields() {
     state.optimizer_config.optimizer_custom_prompt = document.getElementById("opt_custom").value;
 }
 
-// ================== 动态渲染逻辑 ==================
-
-// 预设
-window.renderPresets = () => {
+// 🟢 动态渲染 (增加了入场动画类 item-enter)
+function renderPresets() {
     const html = state.presets.map((p, i) => `
-        <div class="dynamic-item preset-item">
-            <input type="text" class="preset-name" placeholder="指令(如:手办化)" value="${p.name}" onchange="state.presets[${i}].name=this.value">
+        <div class="dynamic-item item-enter" style="animation-delay: ${i * 0.05}s">
+            <input type="text" class="preset-name input-trans" placeholder="预设名" value="${p.name}" data-sync="preset-name" data-index="${i}">
             <span class="colon">:</span>
-            <input type="text" class="preset-prompt" placeholder="对应的英文提示词" value="${p.prompt}" onchange="state.presets[${i}].prompt=this.value">
-            <button class="btn-danger btn-small" onclick="window.delPreset(${i})">删除</button>
+            <input type="text" class="preset-prompt input-trans" placeholder="对应英文提示词" value="${p.prompt}" data-sync="preset-prompt" data-index="${i}">
+            <button data-action="del-preset" data-index="${i}" class="btn-danger btn-small ripple">删除</button>
         </div>
     `).join('');
-    document.getElementById("presets-container").innerHTML = html || '<p class="empty-tip">暂无预设</p>';
-};
-window.addPreset = () => { state.presets.push({name:"", prompt:""}); window.renderPresets(); };
-window.delPreset = (i) => { state.presets.splice(i, 1); window.renderPresets(); };
+    document.getElementById("presets-container").innerHTML = html || '<div class="empty-tip">暂无预设配置</div>';
+}
 
-// 生图节点
-window.renderProviders = () => {
+function renderProviders() {
     const html = state.providers.map((p, i) => `
-        <div class="dynamic-item provider-card">
+        <div class="dynamic-item provider-card item-enter" style="animation-delay: ${i * 0.05}s">
             <div class="provider-header">
-                <h3>节点标识: <input type="text" class="inline-input" value="${p.id || p['节点ID'] || 'node_1'}" onchange="state.providers[${i}].id=this.value"></h3>
-                <button class="btn-danger btn-small" onclick="window.delProvider(${i})">删除此节点</button>
+                <h3><span class="icon">🚀</span> 节点标识: <input type="text" class="inline-input input-trans" value="${p.id}" data-sync="prov-id" data-index="${i}"></h3>
+                <button data-action="del-provider" data-index="${i}" class="btn-danger btn-small ripple">删除此节点</button>
             </div>
             <div class="grid-2-col">
                 <div class="form-group">
                     <label>接口模式</label>
-                    <select onchange="state.providers[${i}].api_type=this.value">
-                        <option value="openai_image" ${(p.api_type||p['接口模式'])=='openai_image'?'selected':''}>openai_image (标准生图)</option>
-                        <option value="openai_chat" ${(p.api_type||p['接口模式'])=='openai_chat'?'selected':''}>openai_chat (对话透传)</option>
+                    <select class="input-trans" data-sync="prov-api" data-index="${i}">
+                        <option value="openai_image" ${p.api_type==='openai_image'?'selected':''}>标准生图 (openai_image)</option>
+                        <option value="openai_chat" ${p.api_type==='openai_chat'?'selected':''}>对话透传 (openai_chat)</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label>接口地址 (需含/v1)</label>
-                    <input type="text" value="${p.base_url || p['接口地址 (需含/v1)'] || ''}" onchange="state.providers[${i}].base_url=this.value">
-                </div>
-                <div class="form-group">
-                    <label>模型名称 (多模型用逗号隔开)</label>
-                    <input type="text" value="${p.model || p['模型名称'] || ''}" onchange="state.providers[${i}].model=this.value">
-                </div>
-                <div class="form-group">
-                    <label>超时时间 (秒)</label>
-                    <input type="number" value="${p.timeout || p['超时时间(秒)'] || 60}" onchange="state.providers[${i}].timeout=this.value">
-                </div>
-                <div class="form-group full-width">
-                    <label>API 密钥 (支持多行负载均衡)</label>
-                    <textarea rows="2" onchange="state.providers[${i}].api_keys=this.value">${Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || p['API密钥'] || '')}</textarea>
-                </div>
+                <div class="form-group"><label>接口地址 (含/v1)</label><input type="text" class="input-trans" value="${p.base_url}" data-sync="prov-url" data-index="${i}"></div>
+                <div class="form-group"><label>模型名称</label><input type="text" class="input-trans" value="${p.model}" data-sync="prov-model" data-index="${i}"></div>
+                <div class="form-group"><label>超时时间 (秒)</label><input type="number" class="input-trans" value="${p.timeout}" data-sync="prov-time" data-index="${i}"></div>
+                <div class="form-group full-width"><label>API 密钥</label><textarea class="input-trans" rows="2" data-sync="prov-keys" data-index="${i}">${p.api_keys}</textarea></div>
             </div>
         </div>
     `).join('');
-    document.getElementById("providers-container").innerHTML = html || '<p class="empty-tip">暂无生图节点</p>';
-};
-window.addProvider = () => { state.providers.push({id:`node_${state.providers.length+1}`, api_type:"openai_image", base_url:"https://api.openai.com/v1", model:"", api_keys:"", timeout:60}); window.renderProviders(); };
-window.delProvider = (i) => { state.providers.splice(i, 1); window.renderProviders(); };
+    document.getElementById("providers-container").innerHTML = html || '<div class="empty-tip">暂无生图节点</div>';
+}
 
-// 视频节点
-window.renderVideoProviders = () => {
+function renderVideoProviders() {
     const html = state.video_providers.map((p, i) => `
-        <div class="dynamic-item provider-card">
+        <div class="dynamic-item provider-card item-enter" style="animation-delay: ${i * 0.05}s">
             <div class="provider-header">
-                <h3>节点标识: <input type="text" class="inline-input" value="${p.id || p['节点ID'] || 'video_node_1'}" onchange="state.video_providers[${i}].id=this.value"></h3>
-                <button class="btn-danger btn-small" onclick="window.delVideoProvider(${i})">删除此节点</button>
+                <h3><span class="icon">🎬</span> 节点标识: <input type="text" class="inline-input input-trans" value="${p.id}" data-sync="vid-id" data-index="${i}"></h3>
+                <button data-action="del-video-provider" data-index="${i}" class="btn-danger btn-small ripple">删除此节点</button>
             </div>
             <div class="grid-2-col">
                 <div class="form-group">
                     <label>视频接口模式</label>
-                    <select onchange="state.video_providers[${i}].api_type=this.value">
-                        <option value="async_task (异步排队轮询/videos/generations)" ${(p.api_type||p['接口模式'])?.includes('async_task')?'selected':''}>异步排队轮询 (推荐)</option>
-                        <option value="openai_sync (同步阻塞直返)" ${(p.api_type||p['接口模式'])?.includes('openai_sync')?'selected':''}>同步阻塞</option>
-                        <option value="openai_chat (对话伪装视频/chat/completions)" ${(p.api_type||p['接口模式'])?.includes('openai_chat')?'selected':''}>Chat 对话伪装</option>
+                    <select class="input-trans" data-sync="vid-api" data-index="${i}">
+                        <option value="async_task (异步排队轮询/videos/generations)" ${p.api_type.includes('async_task')?'selected':''}>异步排队轮询 (推荐)</option>
+                        <option value="openai_sync (同步阻塞直返)" ${p.api_type.includes('openai_sync')?'selected':''}>同步阻塞</option>
+                        <option value="openai_chat (对话伪装视频/chat/completions)" ${p.api_type.includes('openai_chat')?'selected':''}>Chat 对话伪装</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label>接口地址</label>
-                    <input type="text" value="${p.base_url || p['接口地址 (需含/v1或/v2)'] || p['接口地址 (需含/v1)'] || ''}" onchange="state.video_providers[${i}].base_url=this.value">
-                </div>
-                <div class="form-group">
-                    <label>模型名称</label>
-                    <input type="text" value="${p.model || p['模型名称'] || ''}" onchange="state.video_providers[${i}].model=this.value">
-                </div>
-                <div class="form-group">
-                    <label>超时时间 (秒)</label>
-                    <input type="number" value="${p.timeout || p['超时时间(秒)'] || 300}" onchange="state.video_providers[${i}].timeout=this.value">
-                </div>
-                <div class="form-group full-width">
-                    <label>API 密钥</label>
-                    <textarea rows="2" onchange="state.video_providers[${i}].api_keys=this.value">${Array.isArray(p.api_keys) ? p.api_keys.join('\n') : (p.api_keys || p['API密钥'] || '')}</textarea>
-                </div>
+                <div class="form-group"><label>接口地址</label><input type="text" class="input-trans" value="${p.base_url}" data-sync="vid-url" data-index="${i}"></div>
+                <div class="form-group"><label>模型名称</label><input type="text" class="input-trans" value="${p.model}" data-sync="vid-model" data-index="${i}"></div>
+                <div class="form-group"><label>超时时间</label><input type="number" class="input-trans" value="${p.timeout}" data-sync="vid-time" data-index="${i}"></div>
+                <div class="form-group full-width"><label>API 密钥</label><textarea class="input-trans" rows="2" data-sync="vid-keys" data-index="${i}">${p.api_keys}</textarea></div>
             </div>
         </div>
     `).join('');
-    document.getElementById("video-providers-container").innerHTML = html || '<p class="empty-tip">暂无视频节点</p>';
-};
-window.addVideoProvider = () => { state.video_providers.push({id:`video_node_${state.video_providers.length+1}`, api_type:"async_task (异步排队轮询/videos/generations)", base_url:"https://api.example.com/v1", model:"", api_keys:"", timeout:300}); window.renderVideoProviders(); };
-window.delVideoProvider = (i) => { state.video_providers.splice(i, 1); window.renderVideoProviders(); };
+    document.getElementById("video-providers-container").innerHTML = html || '<div class="empty-tip">暂无视频节点</div>';
+}
 
+// 🟢 终极事件委托 (沙盒完美兼容版)
+function setupEventDelegation() {
+    // 拦截所有按钮点击事件
+    document.body.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const action = btn.getAttribute('data-action');
+        const idx = parseInt(btn.getAttribute('data-index'), 10);
 
-// ================== 保存与通信 ==================
-async function saveConfig() {
-    const btn = document.getElementById("save-btn");
-    const msg = document.getElementById("status-msg");
-    
+        if (action === 'save-config') saveConfig(btn);
+        
+        if (action === 'add-preset') { state.presets.push({name:"", prompt:""}); renderPresets(); }
+        if (action === 'del-preset') { state.presets.splice(idx, 1); renderPresets(); }
+        
+        if (action === 'add-provider') { state.providers.push({id:`node_${state.providers.length+1}`, api_type:"openai_image", base_url:"https://api.openai.com/v1", model:"", api_keys:"", timeout:60}); renderProviders(); }
+        if (action === 'del-provider') { state.providers.splice(idx, 1); renderProviders(); }
+
+        if (action === 'add-video-provider') { state.video_providers.push({id:`video_node_${state.video_providers.length+1}`, api_type:"async_task (异步排队轮询/videos/generations)", base_url:"https://api.example.com/v1", model:"", api_keys:"", timeout:300}); renderVideoProviders(); }
+        if (action === 'del-video-provider') { state.video_providers.splice(idx, 1); renderVideoProviders(); }
+    });
+
+    // 拦截所有动态输入框的修改事件，实时同步到 state
+    document.body.addEventListener('change', (e) => {
+        const input = e.target;
+        if (!input.hasAttribute('data-sync')) return;
+        const sync = input.getAttribute('data-sync');
+        const idx = parseInt(input.getAttribute('data-index'), 10);
+        const val = input.value;
+
+        if (sync === 'preset-name') state.presets[idx].name = val;
+        if (sync === 'preset-prompt') state.presets[idx].prompt = val;
+
+        if (sync === 'prov-id') state.providers[idx].id = val;
+        if (sync === 'prov-api') state.providers[idx].api_type = val;
+        if (sync === 'prov-url') state.providers[idx].base_url = val;
+        if (sync === 'prov-model') state.providers[idx].model = val;
+        if (sync === 'prov-time') state.providers[idx].timeout = val;
+        if (sync === 'prov-keys') state.providers[idx].api_keys = val;
+
+        if (sync === 'vid-id') state.video_providers[idx].id = val;
+        if (sync === 'vid-api') state.video_providers[idx].api_type = val;
+        if (sync === 'vid-url') state.video_providers[idx].base_url = val;
+        if (sync === 'vid-model') state.video_providers[idx].model = val;
+        if (sync === 'vid-time') state.video_providers[idx].timeout = val;
+        if (sync === 'vid-keys') state.video_providers[idx].api_keys = val;
+    });
+}
+
+async function saveConfig(btn) {
     btn.disabled = true;
-    msg.textContent = "⏳ 正在热重载保存...";
-    msg.className = "status-saving";
+    const originalText = btn.innerHTML;
+    btn.innerHTML = `<span class="icon animate-spin">⏳</span> 保存中...`;
 
     readBasicFields();
-
-    // 格式化 presets 数组
-    const formattedPresets = state.presets
-        .filter(p => p.name && p.prompt)
-        .map(p => `${p.name}:${p.prompt}`);
+    const formattedPresets = state.presets.filter(p => p.name && p.prompt).map(p => `${p.name}:${p.prompt}`);
 
     const payload = {
         permission_config: state.permission_config,
@@ -218,71 +231,18 @@ async function saveConfig() {
     try {
         const result = await bridge.apiPost("save_config", payload);
         if (result.success) {
-            msg.textContent = "✅ 保存成功！已实时生效。";
-            msg.className = "status-success";
+            showToast("保存成功！已在后台热重载生效 ✨", "success");
         } else {
-            msg.textContent = "❌ 保存失败，请查看日志。";
-            msg.className = "status-error";
+            showToast("保存失败，请检查控制台", "error");
         }
     } catch (e) {
-        msg.textContent = "❌ 网络错误: " + e;
-        msg.className = "status-error";
+        showToast("网络通信错误", "error");
     }
 
     setTimeout(() => {
         btn.disabled = false;
-        msg.textContent = "";
-        msg.className = "status-empty";
-    }, 3000);
-}
-
-init();const bridge = window.AstrBotPluginPage;
-
-async function init() {
-    const context = await bridge.ready();
-    console.log("万象画卷 WebUI 已就绪:", context.pluginName);
-
-    // 1. 从后端获取当前配置
-    const config = await bridge.apiGet("get_config");
-    
-    // 2. 填充基础表单 (示例：权限部分)
-    const permConf = config.permission_config || {};
-    document.getElementById("allowed_users").value = permConf.allowed_users || "";
-    
-    const optConf = config.optimizer_config || {};
-    document.getElementById("enable_optimizer").checked = optConf.enable_optimizer ?? true;
-
-    // 3. 保存逻辑
-    document.getElementById("save-btn").addEventListener("click", async () => {
-        const btn = document.getElementById("save-btn");
-        const msg = document.getElementById("status-msg");
-        
-        btn.disabled = true;
-        msg.textContent = "正在保存...";
-
-        // 构造要保存的完整数据结构，必须与 models.py/conf_schema 一一对应
-        const updatedConfig = {
-            ...config,
-            permission_config: {
-                ...config.permission_config,
-                allowed_users: document.getElementById("allowed_users").value
-            },
-            optimizer_config: {
-                ...config.optimizer_config,
-                enable_optimizer: document.getElementById("enable_optimizer").checked
-            }
-            // ... 继续补充其他字段的映射
-        };
-
-        const result = await bridge.apiPost("save_config", updatedConfig);
-        
-        if (result.success) {
-            msg.textContent = "✅ " + result.message;
-        } else {
-            msg.textContent = "❌ 保存失败";
-        }
-        btn.disabled = false;
-    });
+        btn.innerHTML = originalText;
+    }, 800);
 }
 
 init();

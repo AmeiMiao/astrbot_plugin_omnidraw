@@ -1,5 +1,7 @@
 """
 AstrBot 万象画卷插件 v3.1
+功能：支持 Gemini / gptimage2 高阶参数动态透传。
+优化：完美的多模态图片解析，规避所有数组冲突。内置开发者详细汇报模式。完整保留所有指令与高级透传参数。
 """
 import os
 import base64
@@ -179,6 +181,9 @@ class OmniDrawPlugin(Star):
                 if prov: return prov
             return self.plugin_config.providers[0] if self.plugin_config.providers else None
 
+    # ==========================================
+    # 🎨 指令与控制区 
+    # ==========================================
     @filter.command("万象帮助")
     @handle_errors
     async def cmd_help(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
@@ -187,16 +192,21 @@ class OmniDrawPlugin(Star):
             msg += "✨ 极速宏:\n" + "\n".join([f"/{p}" for p in self.plugin_config.presets.keys()])
         yield event.plain_result(msg)
 
+    # 💡 还原了默认参数，防止用户少输参数导致 AstrBot 崩溃
     @filter.command("切换链路")
     @handle_errors
-    async def cmd_switch_chain(self, event: AstrMessageEvent, target: str, node_id: str) -> AsyncGenerator[Any, None]:
+    async def cmd_switch_chain(self, event: AstrMessageEvent, target: str = "", node_id: str = "") -> AsyncGenerator[Any, None]:
         if not self._has_permission(event): return
         target_map = {"画图": "text2img", "自拍": "selfie", "视频": "video", "副脑": "optimizer"}
         if target not in target_map:
             yield event.plain_result(f"{MessageEmoji.WARNING} 未知目标！支持: 画图/自拍/视频/副脑")
             return
-        chain_key = target_map[target]
         
+        if not node_id:
+            yield event.plain_result(f"{MessageEmoji.WARNING} 缺少节点ID参数！用法: /切换链路 [目标] [节点ID]")
+            return
+
+        chain_key = target_map[target]
         if chain_key == "video": prov = self.plugin_config.get_video_provider(node_id)
         else: prov = self.plugin_config.get_provider(node_id)
             
@@ -210,9 +220,10 @@ class OmniDrawPlugin(Star):
             self.context.update_config(self.raw_config)
         yield event.plain_result(f"{MessageEmoji.SUCCESS} 已将 {target} 链路切换至节点: {node_id}")
 
+    # 💡 还原了默认参数
     @filter.command("切换模型")
     @handle_errors
-    async def cmd_switch_model(self, event: AstrMessageEvent, target: str, model_idx: str = "") -> AsyncGenerator[Any, None]:
+    async def cmd_switch_model(self, event: AstrMessageEvent, target: str = "", model_idx: str = "") -> AsyncGenerator[Any, None]:
         if not self._has_permission(event): return
         target_map = {"画图": "text2img", "自拍": "selfie", "视频": "video"}
         if target not in target_map:
@@ -288,6 +299,7 @@ class OmniDrawPlugin(Star):
         except Exception as e:
             yield event.plain_result(f"💥 绘制失败: {e}")
 
+    # 💡 还原了 p1~p10 参数列
     @filter.command("画")
     @handle_errors
     async def cmd_draw(self, event: AstrMessageEvent, p1: str="", p2: str="", p3: str="", p4: str="", p5: str="", p6: str="", p7: str="", p8: str="", p9: str="", p10: str="") -> AsyncGenerator[Any, None]:
@@ -312,6 +324,7 @@ class OmniDrawPlugin(Star):
             image_url = await chain_manager.run_chain("text2img", prompt, **kwargs)
         yield event.chain_result([self._create_image_component(image_url)])
 
+    # 💡 还原了 p1~p10 参数列
     @filter.command("自拍")
     @handle_errors
     async def cmd_selfie(self, event: AstrMessageEvent, p1: str="", p2: str="", p3: str="", p4: str="", p5: str="", p6: str="", p7: str="", p8: str="", p9: str="", p10: str="") -> AsyncGenerator[Any, None]:
@@ -345,6 +358,7 @@ class OmniDrawPlugin(Star):
             image_url = await chain_manager.run_chain(chain_to_use, final_prompt, **extra_kwargs)
         yield event.chain_result([self._create_image_component(image_url)])
 
+    # 💡 还原了 p1~p10 参数列
     @filter.command("视频")
     @handle_errors
     async def cmd_video(self, event: AstrMessageEvent, p1: str="", p2: str="", p3: str="", p4: str="", p5: str="", p6: str="", p7: str="", p8: str="", p9: str="", p10: str="") -> AsyncGenerator[Any, None]:
@@ -362,9 +376,20 @@ class OmniDrawPlugin(Star):
         
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
+    # ==========================================
+    # 🤖 LLM 工具区 (💡全部恢复了所有大模型透传参数)
+    # ==========================================
     @llm_tool(name="generate_selfie")
-    async def tool_generate_selfie(self, event: AstrMessageEvent, action: str, count: int = 1, aspect_ratio: str = "", size: str = "") -> str:
-        """以此 AI 助理的固定人设拍摄自拍。"""
+    async def tool_generate_selfie(self, event: AstrMessageEvent, action: str, count: int = 1, aspect_ratio: str = "", size: str = "", extra_params: str = "") -> str:
+        """
+        以此 AI 助理的固定人设拍摄自拍。
+        Args:
+            action (string): 动作和场景描述。
+            count (int): 需要生成的图片数量。默认为1。
+            aspect_ratio (string): 宽高比例。
+            size (string): 分辨率。
+            extra_params (string): 附加模型参数透传。
+        """
         if not self._has_permission(event): return "无权限调用。"
         try:
             count = min(max(1, self._normalize_count(count)), self.plugin_config.max_batch_count or 10)
@@ -382,8 +407,13 @@ class OmniDrawPlugin(Star):
                     if safe_refs:
                         extra_kwargs["user_refs"] = safe_refs
                         if not raw_refs: extra_kwargs.pop("persona_ref", None)
+                    
+                    # 💡 重新接驳额外参数
                     if aspect_ratio: extra_kwargs["aspect_ratio"] = aspect_ratio
                     if size: extra_kwargs["size"] = size
+                    if extra_params:
+                        _, ep_kwargs = self.cmd_parser.parse(extra_params)
+                        extra_kwargs.update(ep_kwargs)
                             
                     chain_manager = ChainManager(self.plugin_config, session)
                     tasks.append(chain_manager.run_chain(chain_to_use, final_prompt, **extra_kwargs))
@@ -401,18 +431,28 @@ class OmniDrawPlugin(Star):
 
     @llm_tool(name="generate_image")
     async def tool_generate_image(self, event: AstrMessageEvent, prompt: str, count: int = 1, aspect_ratio: str = "", size: str = "", extra_params: str = "") -> str:
-        """AI 画图工具。当用户提出明确的画面要求你画出来时调用此工具。"""
+        """
+        AI 画图工具。当用户提出明确的画面要求你画出来时调用此工具。
+        Args:
+            prompt (string): 提示词。
+            count (int): 图片数量。默认为1。
+            aspect_ratio (string): 宽高比例。
+            size (string): 分辨率。
+            extra_params (string): 其他参数。
+        """
         if not self._has_permission(event): return "无权限调用。"
         try:
             count = min(max(1, self._normalize_count(count)), self.plugin_config.max_batch_count or 10)
             optimized_actions = await self.prompt_optimizer.optimize(prompt, count)
             safe_refs = await self._process_and_save_images(self._get_event_images(event))
+            
             kwargs = {"user_refs": safe_refs} if safe_refs else {}
+            # 💡 重新接驳额外参数
             if aspect_ratio: kwargs["aspect_ratio"] = aspect_ratio
             if size: kwargs["size"] = size
             if extra_params:
-                _, extra_kwargs = self.cmd_parser.parse(extra_params)
-                kwargs.update(extra_kwargs)
+                _, ep_kwargs = self.cmd_parser.parse(extra_params)
+                kwargs.update(ep_kwargs)
 
             tasks = []
             async with aiohttp.ClientSession() as session:
@@ -430,14 +470,29 @@ class OmniDrawPlugin(Star):
             return f"系统提示：画图失败 ({str(e)})。"
 
     @llm_tool(name="generate_video")
-    async def tool_generate_video(self, event: AstrMessageEvent, prompt: str, count: int = 1) -> str:
-        """AI 视频生成工具。当用户要求生成一段视频时调用。"""
+    async def tool_generate_video(self, event: AstrMessageEvent, prompt: str, count: int = 1, aspect_ratio: str = "", size: str = "", extra_params: str = "") -> str:
+        """
+        AI 视频生成工具。当用户要求生成一段视频时调用。
+        Args:
+            prompt (string): 视频提示词。
+            count (int): 视频数量，默认为 1。
+            aspect_ratio (string): 宽高比例。
+            size (string): 分辨率。
+            extra_params (string): 附加参数，透传至底层引擎。
+        """
         if not self._has_permission(event): return "无权限调用。"
         try:
             count = min(max(1, self._normalize_count(count)), self.plugin_config.max_batch_count or 10)
             safe_refs = await self._process_and_save_images(self._get_event_images(event))
+            
+            # 💡 重新接驳并组合视频额外参数
+            full_prompt = prompt
+            if aspect_ratio: full_prompt += f" --ar {aspect_ratio}"
+            if size: full_prompt += f" --size {size}"
+            if extra_params: full_prompt += f" {extra_params}"
+
             for _ in range(count):
-                asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
+                asyncio.create_task(self.video_manager.background_task_runner(event, full_prompt, safe_refs))
             return f"系统提示：已在后台独立提交了 {count} 个视频渲染任务。请告诉用户正在渲染中。"
         except Exception as e:
             return f"系统提示：失败 ({str(e)})。"

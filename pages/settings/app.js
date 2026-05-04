@@ -5,18 +5,16 @@ let state = {
     presets: [], providers: [], video_providers: []
 };
 
-// 丝滑弹窗系统
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.innerHTML = `<span class="toast-text">${message}</span>`;
+    toast.innerHTML = `<span>${message}</span>`;
     container.appendChild(toast);
     setTimeout(() => toast.classList.add('toast-fadeout'), 2500);
     setTimeout(() => toast.remove(), 2800);
 }
 
-// 深度数据打捞 (确保旧数据100%找回)
 const deepFind = (obj, keys, def = "") => {
     if (!obj) return def;
     for (const key of keys) {
@@ -123,13 +121,13 @@ function readBasicFields() {
 function renderPresets() {
     const html = state.presets.map((p, i) => `
         <div class="list-item">
-            <input type="text" class="input-modern preset-name" placeholder="预设指令名" value="${p.name}" data-sync="preset-name" data-index="${i}">
+            <input type="text" class="input-modern preset-name" placeholder="指令别名" value="${p.name}" data-sync="preset-name" data-index="${i}">
             <span class="divider-text">映射为</span>
-            <input type="text" class="input-modern preset-prompt" placeholder="对应的底层提示词" value="${p.prompt}" data-sync="preset-prompt" data-index="${i}">
+            <input type="text" class="input-modern preset-prompt" placeholder="底层的英文描述与参数" value="${p.prompt}" data-sync="preset-prompt" data-index="${i}">
             <button data-action="del-preset" data-index="${i}" class="btn-icon">×</button>
         </div>
     `).join('');
-    document.getElementById("presets-container").innerHTML = html || '<div class="empty-tip">暂无预设指令</div>';
+    document.getElementById("presets-container").innerHTML = html || '<div class="empty-tip">尚未添加快捷预设</div>';
 }
 
 function renderProviders() {
@@ -137,8 +135,8 @@ function renderProviders() {
         <div class="list-card">
             <div class="list-card-header">
                 <div class="node-title">
-                    <span class="node-badge">Image Node ${i+1}</span>
-                    <input type="text" class="input-modern input-minimal" placeholder="节点ID" value="${p.id}" data-sync="prov-id" data-index="${i}">
+                    <span class="node-badge">Image Node</span>
+                    <input type="text" class="input-modern input-minimal" placeholder="填写节点标识" value="${p.id}" data-sync="prov-id" data-index="${i}">
                 </div>
                 <button data-action="del-provider" data-index="${i}" class="btn-text">移除</button>
             </div>
@@ -146,18 +144,18 @@ function renderProviders() {
                 <div class="form-group">
                     <label>接口模式</label>
                     <select class="input-modern select-modern" data-sync="prov-api" data-index="${i}">
-                        <option value="openai_image" ${p.api_type==='openai_image'?'selected':''}>openai_image (标准生图)</option>
-                        <option value="openai_chat" ${p.api_type==='openai_chat'?'selected':''}>openai_chat (对话透传)</option>
+                        <option value="openai_image" ${p.api_type==='openai_image'?'selected':''}>标准生图 (openai_image)</option>
+                        <option value="openai_chat" ${p.api_type==='openai_chat'?'selected':''}>对话透传 (openai_chat)</option>
                     </select>
                 </div>
                 <div class="form-group"><label>接口地址 (需含/v1)</label><input type="text" class="input-modern" value="${p.base_url}" data-sync="prov-url" data-index="${i}"></div>
-                <div class="form-group"><label>可用模型 (逗号分隔)</label><input type="text" class="input-modern" value="${p.model}" data-sync="prov-model" data-index="${i}"></div>
-                <div class="form-group"><label>请求超时限制</label><input type="number" class="input-modern" value="${p.timeout}" data-sync="prov-time" data-index="${i}"></div>
-                <div class="form-group full-width"><label>API Keys (支持多行负载均衡)</label><textarea class="input-modern" rows="2" data-sync="prov-keys" data-index="${i}">${p.api_keys}</textarea></div>
+                <div class="form-group"><label>支持的模型</label><input type="text" class="input-modern" value="${p.model}" data-sync="prov-model" data-index="${i}"></div>
+                <div class="form-group"><label>最大超时 (秒)</label><input type="number" class="input-modern" value="${p.timeout}" data-sync="prov-time" data-index="${i}"></div>
+                <div class="form-group full-width"><label>API Keys (支持多行换行)</label><textarea class="input-modern" rows="2" data-sync="prov-keys" data-index="${i}">${p.api_keys}</textarea></div>
             </div>
         </div>
     `).join('');
-    document.getElementById("providers-container").innerHTML = html || '<div class="empty-tip">未配置生图节点</div>';
+    document.getElementById("providers-container").innerHTML = html || '<div class="empty-tip">请点击右上角添加生图节点</div>';
 }
 
 function renderVideoProviders() {
@@ -165,33 +163,34 @@ function renderVideoProviders() {
         <div class="list-card">
             <div class="list-card-header">
                 <div class="node-title">
-                    <span class="node-badge">Video Node ${i+1}</span>
-                    <input type="text" class="input-modern input-minimal" placeholder="节点ID" value="${p.id}" data-sync="vid-id" data-index="${i}">
+                    <span class="node-badge">Video Node</span>
+                    <input type="text" class="input-modern input-minimal" placeholder="填写节点标识" value="${p.id}" data-sync="vid-id" data-index="${i}">
                 </div>
                 <button data-action="del-video-provider" data-index="${i}" class="btn-text">移除</button>
             </div>
             <div class="grid-2-col">
                 <div class="form-group">
-                    <label>通信协议</label>
+                    <label>调用协议</label>
                     <select class="input-modern select-modern" data-sync="vid-api" data-index="${i}">
-                        <option value="async_task (异步排队轮询/videos/generations)" ${p.api_type.includes('async_task')?'selected':''}>异步排队轮询</option>
-                        <option value="openai_sync (同步阻塞直返)" ${p.api_type.includes('openai_sync')?'selected':''}>同步阻塞返回</option>
-                        <option value="openai_chat (对话伪装视频/chat/completions)" ${p.api_type.includes('openai_chat')?'selected':''}>对话伪装协议</option>
+                        <option value="async_task (异步排队轮询/videos/generations)" ${p.api_type.includes('async_task')?'selected':''}>异步排队轮询 (稳定)</option>
+                        <option value="openai_sync (同步阻塞直返)" ${p.api_type.includes('openai_sync')?'selected':''}>同步阻塞 (易超时)</option>
+                        <option value="openai_chat (对话伪装视频/chat/completions)" ${p.api_type.includes('openai_chat')?'selected':''}>对话接口伪装</option>
                     </select>
                 </div>
                 <div class="form-group"><label>接口地址</label><input type="text" class="input-modern" value="${p.base_url}" data-sync="vid-url" data-index="${i}"></div>
                 <div class="form-group"><label>模型名称</label><input type="text" class="input-modern" value="${p.model}" data-sync="vid-model" data-index="${i}"></div>
-                <div class="form-group"><label>请求超时</label><input type="number" class="input-modern" value="${p.timeout}" data-sync="vid-time" data-index="${i}"></div>
+                <div class="form-group"><label>最大超时 (秒)</label><input type="number" class="input-modern" value="${p.timeout}" data-sync="vid-time" data-index="${i}"></div>
                 <div class="form-group full-width"><label>API Keys</label><textarea class="input-modern" rows="2" data-sync="vid-keys" data-index="${i}">${p.api_keys}</textarea></div>
             </div>
         </div>
     `).join('');
-    document.getElementById("video-providers-container").innerHTML = html || '<div class="empty-tip">未配置视频节点</div>';
+    document.getElementById("video-providers-container").innerHTML = html || '<div class="empty-tip">请点击右上角添加视频节点</div>';
 }
 
 function setupEventDelegation() {
-    // 丝滑 Tab 切换
+    // 监听全局点击事件
     document.body.addEventListener('click', (e) => {
+        // Tab 切换
         const navItem = e.target.closest('.nav-item');
         if (navItem) {
             const targetId = navItem.getAttribute('data-target');
@@ -200,17 +199,16 @@ function setupEventDelegation() {
             
             document.querySelectorAll('.tab-pane').forEach(pane => {
                 pane.classList.remove('active');
-                setTimeout(() => { if (!pane.classList.contains('active')) pane.style.display = 'none'; }, 200);
+                setTimeout(() => { if (!pane.classList.contains('active')) pane.style.display = 'none'; }, 300);
             });
             
             const targetPane = document.getElementById(targetId);
             targetPane.style.display = 'block';
-            // 触发布局重绘以启动过渡动画
-            void targetPane.offsetWidth;
-            targetPane.classList.add('active');
+            setTimeout(() => targetPane.classList.add('active'), 10);
             return;
         }
 
+        // 按钮操作
         const btn = e.target.closest('button[data-action]');
         if (!btn) return;
         const action = btn.getAttribute('data-action');
@@ -225,7 +223,7 @@ function setupEventDelegation() {
         if (action === 'del-video-provider') { state.video_providers.splice(idx, 1); renderVideoProviders(); }
     });
 
-    // 状态绑定
+    // 监听全局输入事件，实时同步状态
     document.body.addEventListener('input', (e) => {
         const input = e.target;
         if (!input.hasAttribute('data-sync')) return;
@@ -253,7 +251,7 @@ function setupEventDelegation() {
 async function saveConfig(btn) {
     btn.disabled = true;
     const originalText = btn.innerHTML;
-    btn.innerHTML = `保存中...`;
+    btn.innerHTML = `正在保存...`;
 
     readBasicFields();
     const formattedPresets = state.presets.filter(p => p.name && p.prompt).map(p => `${p.name}:${p.prompt}`);
@@ -271,12 +269,12 @@ async function saveConfig(btn) {
     try {
         const result = await bridge.apiPost("save_config", payload);
         if (result.success) {
-            showToast("设置已保存并生效", "success");
+            showToast("所有配置已保存并热重载生效", "success");
         } else {
-            showToast("保存失败，请检查数据", "error");
+            showToast("保存失败，请检查输入", "error");
         }
     } catch (e) {
-        showToast("网络异常", "error");
+        showToast("无法连接到底层服务", "error");
     }
 
     setTimeout(() => {

@@ -1,6 +1,7 @@
 """
 AstrBot 万象画卷插件 v3.1 - 数据模型
 采用极简安全循环，完美兼容全新的中文 UI 标签与历史遗留英文标签。
+支持多模态参考图数组。
 """
 import os
 from dataclasses import dataclass, field
@@ -28,9 +29,8 @@ class PluginConfig:
     max_batch_count: int      
     persona_name: str
     persona_base_prompt: str
-    persona_ref_image: str
+    persona_ref_image: List[str]  # 🚀 这里正式升级为 List[str]
     allowed_users: List[str]
-    # 👇 新增的副脑风格配置
     optimizer_style: str
     optimizer_custom_prompt: str
 
@@ -39,16 +39,8 @@ class PluginConfig:
         providers = []
         for p in config_dict.get("providers", []):
             model_raw = str(p.get("模型名称", p.get("model", "")))
-            available_models = []
-            for m in model_raw.replace("，", ",").split(","):
-                if m.strip():
-                    available_models.append(m.strip())
-                    
-            api_keys = []
-            for k in str(p.get("API密钥", p.get("api_keys", ""))).split("\n"):
-                if k.strip():
-                    api_keys.append(k.strip())
-                    
+            available_models = [m.strip() for m in model_raw.replace("，", ",").split(",") if m.strip()]
+            api_keys = [k.strip() for k in str(p.get("API密钥", p.get("api_keys", ""))).split("\n") if k.strip()]
             providers.append(ProviderConfig(
                 id=str(p.get("节点ID", p.get("id", "node_1"))),
                 api_type=str(p.get("接口模式", p.get("api_type", "openai_image"))),
@@ -62,16 +54,8 @@ class PluginConfig:
         video_providers = []
         for p in config_dict.get("video_providers", []):
             model_raw = str(p.get("模型名称", p.get("model", "")))
-            available_models = []
-            for m in model_raw.replace("，", ",").split(","):
-                if m.strip():
-                    available_models.append(m.strip())
-                    
-            api_keys = []
-            for k in str(p.get("API密钥", p.get("api_keys", ""))).split("\n"):
-                if k.strip():
-                    api_keys.append(k.strip())
-                    
+            available_models = [m.strip() for m in model_raw.replace("，", ",").split(",") if m.strip()]
+            api_keys = [k.strip() for k in str(p.get("API密钥", p.get("api_keys", ""))).split("\n") if k.strip()]
             video_providers.append(ProviderConfig(
                 id=str(p.get("节点ID", p.get("id", "video_node_1"))),
                 api_type=str(p.get("接口模式", p.get("api_type", "async_task"))),
@@ -89,11 +73,9 @@ class PluginConfig:
                 if separator in p:
                     parts = p.split(separator, 1)
                     if len(parts) == 2:
-                        cmd = parts[0].strip()
-                        prompt = parts[1].strip()
+                        cmd, prompt = parts[0].strip(), parts[1].strip()
                         if cmd and prompt:
-                            if cmd.startswith("/"): 
-                                cmd = cmd[1:]
+                            if cmd.startswith("/"): cmd = cmd[1:]
                             presets_dict[cmd] = prompt
 
         persona_conf = config_dict.get("persona_config", {})
@@ -101,17 +83,31 @@ class PluginConfig:
         router_conf = config_dict.get("router_config", {})
         perm_conf = config_dict.get("permission_config", {})
 
+        # 🚀 核心修复：完美支持多图数组的安全解析
         raw_images = persona_conf.get("persona_ref_image", [])
-        if isinstance(raw_images, str): raw_images = [raw_images] if raw_images.strip() else []
-        ref_path = raw_images # 现在 ref_path 变成了一个列表，可以直接喂给大模型
-            
-        if ref_path and not ref_path.startswith("http") and not os.path.isabs(ref_path):
-            target_path = os.path.abspath(os.path.join(data_dir, ref_path))
-            if os.path.exists(target_path):
-                ref_path = target_path
+        if isinstance(raw_images, str):
+            raw_images = [raw_images] if raw_images.strip() else []
+        elif not isinstance(raw_images, list):
+            raw_images = []
+
+        processed_ref_paths = []
+        for img_path in raw_images:
+            if isinstance(img_path, dict):
+                img_path = img_path.get("path") or img_path.get("url") or img_path.get("file") or ""
+            if not isinstance(img_path, str) or not img_path.strip():
+                continue
+                
+            img_path = img_path.strip()
+            # 兼容 Base64 或 网络图片 或 已经是绝对路径
+            if img_path.startswith("data:image") or img_path.startswith("http") or os.path.isabs(img_path):
+                processed_ref_paths.append(img_path)
             else:
-                ref_path = os.path.abspath(os.path.join(data_dir, ref_path))
-            
+                target_path = os.path.abspath(os.path.join(data_dir, img_path))
+                if os.path.exists(target_path):
+                    processed_ref_paths.append(target_path)
+                else:
+                    processed_ref_paths.append(os.path.abspath(os.path.join(data_dir, img_path)))
+
         chains = {"text2img": [], "selfie": [], "video": [], "optimizer": []}
         for item in str(router_conf.get("chain_text2img", "node_1")).split(","):
             if item.strip(): chains["text2img"].append(item.strip())
@@ -123,11 +119,7 @@ class PluginConfig:
             if item.strip(): chains["optimizer"].append(item.strip())
 
         raw_users = perm_conf.get("allowed_users", "")
-        allowed_users = []
-        if raw_users:
-            for u in str(raw_users).replace("，", ",").split(","):
-                if u.strip():
-                    allowed_users.append(u.strip())
+        allowed_users = [u.strip() for u in str(raw_users).replace("，", ",").split(",") if u.strip()]
 
         return cls(
             providers=providers,
@@ -140,8 +132,7 @@ class PluginConfig:
             max_batch_count=int(opt_conf.get("max_batch_count", 0)),
             persona_name=str(persona_conf.get("persona_name", "默认助理")),
             persona_base_prompt=str(persona_conf.get("persona_base_prompt", "")),
-            persona_ref_image=ref_path,
-            # 👇 这里的逗号之前漏掉了，现在加上了
+            persona_ref_image=processed_ref_paths, # 传入安全解析后的数组
             allowed_users=allowed_users,
             optimizer_style=str(opt_conf.get("optimizer_style", "手机日常原生感")),
             optimizer_custom_prompt=str(opt_conf.get("optimizer_custom_prompt", ""))
@@ -149,12 +140,10 @@ class PluginConfig:
 
     def get_provider(self, provider_id: str) -> Optional[ProviderConfig]:
         for p in self.providers:
-            if p.id == provider_id:
-                return p
+            if p.id == provider_id: return p
         return None
         
     def get_video_provider(self, provider_id: str) -> Optional[ProviderConfig]:
         for p in self.video_providers:
-            if p.id == provider_id:
-                return p
+            if p.id == provider_id: return p
         return None

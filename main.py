@@ -10,7 +10,7 @@ import time
 import aiohttp
 import asyncio
 import re
-import json  # 💡 用于彻底持久化落盘
+import json
 from typing import AsyncGenerator, Any
 
 from quart import jsonify, request
@@ -46,12 +46,14 @@ from .core.prompt_optimizer import PromptOptimizer
 class OmniDrawPlugin(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
-        self.data_dir = str(StarTools.get_data_dir())
         
-        # 💡 [持久化核心 1]：定义属于我们自己的硬核配置存放路径，保证重启/更新不丢！
+        # 🔴 强制硬编码路径：完美对齐你的 data\plugin_data\astrbot_plugin_omnidraw
+        base_dir = os.getcwd()
+        self.data_dir = os.path.join(base_dir, "data", "plugin_data", "astrbot_plugin_omnidraw")
+        os.makedirs(self.data_dir, exist_ok=True)
+        
         self.config_path = os.path.join(self.data_dir, "omnidraw_persist_config.json")
         
-        # 💡 [持久化核心 2]：启动时主动读取。如果有我们自己保存过的文件，直接覆盖掉系统给的空配置
         if os.path.exists(self.config_path):
             try:
                 with open(self.config_path, "r", encoding="utf-8") as f:
@@ -82,7 +84,6 @@ class OmniDrawPlugin(Star):
         self.video_manager = VideoManager(self.plugin_config)
         self.prompt_optimizer = PromptOptimizer(self.plugin_config)
         
-        # 💡 [持久化核心 3]：接收到前端数据后，立刻将其死死钉进物理硬盘
         try:
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(self.raw_config, f, ensure_ascii=False, indent=4)
@@ -91,7 +92,6 @@ class OmniDrawPlugin(Star):
             logger.error(f"[OmniDraw] 配置文件持久化写入失败: {e}")
             return jsonify({"success": False, "message": f"硬盘写入失败: {e}"})
         
-        # 通知框架层级 (防部分旧版框架卡死)
         if hasattr(self.context, 'update_config'):
             try:
                 self.context.update_config(new_config)
@@ -139,7 +139,8 @@ class OmniDrawPlugin(Star):
         processed_paths = []
         if not raw_images: return processed_paths
         
-        save_dir = os.path.abspath(os.path.join(self.data_dir, "user_refs"))
+        # 将会严格落入 data/plugin_data/astrbot_plugin_omnidraw/user_refs
+        save_dir = os.path.join(self.data_dir, "user_refs")
         os.makedirs(save_dir, exist_ok=True)
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         
@@ -189,7 +190,7 @@ class OmniDrawPlugin(Star):
     def _create_image_component(self, image_url: str) -> Image:
         if image_url.startswith("data:image"):
             b64_data = image_url.split(",", 1)[1]
-            save_dir = os.path.abspath(os.path.join(self.data_dir, "temp_images"))
+            save_dir = os.path.join(self.data_dir, "temp_images")
             os.makedirs(save_dir, exist_ok=True)
             file_path = os.path.join(save_dir, f"img_{uuid.uuid4().hex[:8]}.png")
             with open(file_path, "wb") as f: f.write(base64.b64decode(b64_data))
@@ -244,7 +245,6 @@ class OmniDrawPlugin(Star):
         self.plugin_config.chains[chain_key] = [node_id]
         self.raw_config.setdefault("router_config", {})[f"chain_{chain_key}"] = node_id
         
-        # 同步写入物理硬盘保存当前切换状态
         try:
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(self.raw_config, f, ensure_ascii=False, indent=4)
@@ -300,7 +300,6 @@ class OmniDrawPlugin(Star):
                 p_dict["model"] = selected_model
                 break
                 
-        # 同步写入物理硬盘保存当前切换状态
         try:
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(self.raw_config, f, ensure_ascii=False, indent=4)
@@ -374,7 +373,8 @@ class OmniDrawPlugin(Star):
         final_prompt, extra_kwargs = self.persona_manager.build_persona_prompt(opt_actions[0] if opt_actions else user_input)
         extra_kwargs.update(kwargs)
         
-        persona_ref = self.plugin_config.persona_ref_images
+        # 🔴 强制使用单数：persona_ref_image，完美对齐你的 persona_manager.py
+        persona_ref = self.plugin_config.persona_ref_image
         raw_refs = self._get_event_images(event)
         target_refs = raw_refs if raw_refs else persona_ref
         
@@ -413,7 +413,7 @@ class OmniDrawPlugin(Star):
         asyncio.create_task(self.video_manager.background_task_runner(event, prompt, safe_refs))
 
     # ==========================================
-    # 🤖 LLM 工具区 (💡全部恢复了带有详细注释的参数定义)
+    # 🤖 LLM 工具区 (参数完美保留)
     # ==========================================
     @llm_tool(name="generate_selfie")
     async def tool_generate_selfie(self, event: AstrMessageEvent, action: str, count: int = 1, aspect_ratio: str = "", size: str = "", extra_params: str = "") -> str:
@@ -430,7 +430,9 @@ class OmniDrawPlugin(Star):
         try:
             count = min(max(1, self._normalize_count(count)), self.plugin_config.max_batch_count or 10)
             optimized_actions = await self.prompt_optimizer.optimize(action, count)
-            persona_ref = self.plugin_config.persona_ref_images
+            
+            # 🔴 强制使用单数：persona_ref_image
+            persona_ref = self.plugin_config.persona_ref_image
             raw_refs = self._get_event_images(event)
             target_refs = raw_refs if raw_refs else persona_ref
             safe_refs = await self._process_and_save_images(target_refs)

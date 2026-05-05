@@ -11,7 +11,7 @@ import aiohttp
 import asyncio
 import re
 import json
-import shutil
+import shutil # ✨ 引入文件拷贝以支持图库留档
 from typing import AsyncGenerator, Any
 
 from quart import jsonify, request
@@ -52,6 +52,7 @@ class OmniDrawPlugin(Star):
         self.data_dir = os.path.join(base_dir, "data", "plugin_data", "astrbot_plugin_omnidraw")
         os.makedirs(self.data_dir, exist_ok=True)
         
+        # ✨ 图库专属目录
         self.temp_images_dir = os.path.join(self.data_dir, "temp_images")
         os.makedirs(self.temp_images_dir, exist_ok=True)
         
@@ -75,18 +76,19 @@ class OmniDrawPlugin(Star):
 
         self.context.register_web_api("/astrbot_plugin_omnidraw/get_config", self.get_config_handler, ["GET"], "获取配置")
         self.context.register_web_api("/astrbot_plugin_omnidraw/save_config", self.save_config_handler, ["POST"], "保存配置")
+        
         self.context.register_web_api("/astrbot_plugin_omnidraw/get_gallery_list", self.get_gallery_list, ["GET"], "拉取图库列表")
         self.context.register_web_api("/astrbot_plugin_omnidraw/get_gallery_image", self.get_gallery_image, ["GET"], "加载单张图片")
         self.context.register_web_api("/astrbot_plugin_omnidraw/delete_gallery_images", self.delete_gallery_images, ["POST"], "批量删除图片")
 
     # ==========================================
-    # ✨ 生图图库后端接口 (暴力解析，绝不漏单)
+    # ✨ 生图图库后端接口
     # ==========================================
     async def get_gallery_list(self):
         if not os.path.exists(self.temp_images_dir): return jsonify([])
         files = [f for f in os.listdir(self.temp_images_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
         files.sort(key=lambda x: os.path.getmtime(os.path.join(self.temp_images_dir, x)), reverse=True)
-        return jsonify(files[:300]) 
+        return jsonify(files[:300]) # 保护机制：最多拉取300张
 
     async def get_gallery_image(self):
         filename = request.args.get("filename")
@@ -102,7 +104,7 @@ class OmniDrawPlugin(Star):
             return jsonify({"error": str(e)})
 
     async def delete_gallery_images(self):
-        # ✨ 终极防空数据：暴力从 raw_data 解析 JSON，防止 Quart 框架吞掉 payload
+        # ✨ 暴力解析前端数据：无论 Content-Type 是什么，强行拆解 JSON 保证能拿到数组
         try:
             raw_data = await request.get_data()
             if raw_data:
@@ -110,25 +112,22 @@ class OmniDrawPlugin(Star):
             else:
                 data = await request.get_json(silent=True) or {}
         except Exception as e:
-            logger.error(f"[OmniDraw] JSON 解析失败: {e}")
+            logger.error(f"[OmniDraw] 图库删除 JSON 解析失败: {e}")
             data = {}
 
         filenames = data.get("filenames", [])
         if not filenames:
-            return jsonify({"success": False, "message": "未能识别要删除的文件"})
+            return jsonify({"success": False, "message": "未能收到有效的文件列表"})
 
         count = 0
         for f in filenames:
-            safe_f = os.path.basename(f)
+            safe_f = os.path.basename(f) # 严格防御路径穿越
             path = os.path.join(self.temp_images_dir, safe_f)
             if os.path.exists(path):
                 try:
                     os.remove(path)
                     count += 1
-                except Exception as e:
-                    logger.error(f"[OmniDraw] 删除图片 {safe_f} 失败: {e}")
-                    pass
-                    
+                except: pass
         return jsonify({"success": True, "count": count})
 
     # ==========================================
@@ -149,6 +148,7 @@ class OmniDrawPlugin(Star):
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(self.raw_config, f, ensure_ascii=False, indent=4)
         except Exception as e:
+            logger.error(f"[OmniDraw] 配置文件持久化写入失败: {e}")
             return jsonify({"success": False, "message": f"硬盘写入失败: {e}"})
         
         if hasattr(self.context, 'update_config'):
@@ -265,6 +265,7 @@ class OmniDrawPlugin(Star):
             return (match.group(1) or "").strip()
         return fallback.strip()
 
+    # ✨ 核心拦截升级为 async 函数：不论图片是链接还是 Base64，发送给用户前统统强行下载进入图库！
     async def _create_image_component(self, image_url: str) -> Image:
         filename = f"img_{int(time.time()*1000)}_{uuid.uuid4().hex[:4]}.png"
         file_path = os.path.join(self.temp_images_dir, filename)

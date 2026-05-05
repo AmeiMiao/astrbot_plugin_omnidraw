@@ -690,11 +690,10 @@ select.input-modern {
     display: flex;
     flex-wrap: wrap;
     gap: 15px;
-    align-items: stretch;
+    align-items: flex-start;
 }
 
-.upload-trigger,
-.image-preview-wrapper {
+.upload-trigger {
     position: relative;
     width: 88px;
     height: 88px;
@@ -744,19 +743,33 @@ select.input-modern {
 }
 
 .image-preview-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+    height: fit-content;
+    min-width: 0;
+    min-height: 0;
+    max-width: 150px;
+    max-height: 92px;
     overflow: visible;
     border: 2px solid #fff;
+    border-radius: var(--radius-sm);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    line-height: 0;
     animation: popIn 400ms cubic-bezier(0.2, 1.24, 0.28, 1) both;
 }
 
 .image-preview {
     display: block;
-    width: 100%;
-    height: 100%;
-    min-height: 88px;
+    width: auto;
+    height: auto;
+    max-width: 146px;
+    max-height: 88px;
+    min-height: 0;
     border-radius: calc(var(--radius-sm) - 2px);
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .btn-del-img {
@@ -1237,6 +1250,8 @@ select.input-modern {
     .multi-upload-container {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+        justify-items: start;
     }
 }
 

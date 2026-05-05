@@ -3,7 +3,7 @@ const bridge = window.AstrBotPluginPage;
 let state = {
     permission_config: {}, persona_config: { persona_ref_image: [] }, optimizer_config: {}, router_config: {},
     presets: [], providers: [], video_providers: [], verbose_report: false,
-    gallery: [], selected_gallery_files: new Set() // ✨ 注入图库状态
+    gallery: [], selected_gallery_files: new Set() // ✨ 图库状态
 };
 
 function showToast(message, type = 'success') {
@@ -16,7 +16,7 @@ function showToast(message, type = 'success') {
     setTimeout(() => toast.remove(), 2800);
 }
 
-// ✨ 图库渲染引擎：采用与【人设参考图】完全一致的 DOM 结构，保持原比例！
+// ✨ 修复：完全复用 image-preview 类，保证高度一致、宽度自适应（不拉伸）
 async function renderGallery() {
     const container = document.getElementById('gallery-container');
     if(!container) return;
@@ -25,25 +25,28 @@ async function renderGallery() {
         return;
     }
     
-    container.innerHTML = state.gallery.map(filename => {
+    container.innerHTML = state.gallery.map((filename, idx) => {
         const isSelected = state.selected_gallery_files.has(filename);
-        // 💡 直接套用你原生的 image-preview-wrapper 和 image-preview 类
+        // 使用原版样式 image-preview-wrapper 与 image-preview
         return `
-        <div class="image-preview-wrapper gallery-item-wrapper" data-file="${filename}" style="position: relative; cursor: pointer; transition: transform 0.2s;">
-            <img src="" class="image-preview" style="height: 140px; border: ${isSelected ? '3px solid #006FEE' : '2px solid #FFF'}; opacity: ${isSelected ? '0.8' : '1'}; transition: all 0.2s;" id="img-${filename.replace(/\./g,'_')}">
-            ${isSelected ? `<div style="position: absolute; top: -8px; right: -8px; width: 24px; height: 24px; background: #006FEE; color: #FFF; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; z-index: 10;">✓</div>` : ''}
+        <div class="image-preview-wrapper gallery-item-wrapper" data-file="${filename}" style="position: relative; cursor: pointer; transition: transform 0.2s; border: ${isSelected ? '3px solid #006FEE' : '2px solid transparent'}; border-radius: 8px; overflow: hidden; display: inline-block;">
+            <img src="" class="image-preview" style="display: block; opacity: ${isSelected ? '0.8' : '1'}; transition: all 0.2s;" id="gallery-img-${idx}">
+            ${isSelected ? `<div style="position: absolute; top: 0; right: 0; width: 24px; height: 24px; background: #006FEE; color: #FFF; border-bottom-left-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; z-index: 10;">✓</div>` : ''}
         </div>
         `;
     }).join('');
 
-    for(const filename of state.gallery) {
+    // ✨ 修复图片获取 BUG：将参数直接拼在 URL 后，防止 bridge.apiGet 漏传参数
+    for(let idx = 0; idx < state.gallery.length; idx++) {
+        const filename = state.gallery[idx];
         try {
-            const imgEl = document.getElementById(`img-${filename.replace(/\./g,'_')}`);
+            const imgEl = document.getElementById(`gallery-img-${idx}`);
             if(!imgEl) continue;
             // 防重复加载
-            if(!imgEl.src || imgEl.src.endsWith('index.html')) {
-                 const res = await bridge.apiGet("get_gallery_image", { filename });
-                 if(res && res.base64) imgEl.src = res.base64;
+            if(!imgEl.getAttribute('src')) {
+                 const url = `get_gallery_image?filename=${encodeURIComponent(filename)}`;
+                 const res = await bridge.apiGet(url);
+                 if(res && res.base64) imgEl.setAttribute('src', res.base64);
             }
         } catch(e) {}
     }
@@ -80,7 +83,7 @@ function renderSelectors() {
 function renderPersonaImages() {
     const container = document.getElementById('persona-upload-container');
     if(!container) return;
-    container.querySelectorAll('.image-preview-wrapper').forEach(el => el.remove());
+    container.querySelectorAll('.image-preview-wrapper:not(.gallery-item-wrapper)').forEach(el => el.remove());
     const trigger = document.getElementById('persona-upload-trigger');
     const images = state.persona_config.persona_ref_image || [];
     images.forEach((url, idx) => {
@@ -167,7 +170,7 @@ async function init() {
     setupEventDelegation();
     renderPersonaImages();
     
-    fetchGallery();
+    fetchGallery(); // 初始拉取图库
 }
 
 function bindBasicFields() {
@@ -328,7 +331,7 @@ function setupEventDelegation() {
             document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
             document.getElementById(navItem.getAttribute('data-target')).classList.add('active');
             
-            // ✨ 当切换到图库时强制刷新
+            // 切换到图库强制拉新
             if (navItem.getAttribute('data-target') === 'tab-gallery') fetchGallery();
             return;
         }
@@ -357,7 +360,7 @@ function setupEventDelegation() {
 
         if (e.target.closest('#persona-upload-trigger')) fileInput.click();
 
-        // ✨ 图库图片的点击选中/取消选中
+        // ✨ 处理图库图片的选中逻辑
         const galleryItem = e.target.closest('.gallery-item-wrapper');
         if (galleryItem) {
             const filename = galleryItem.getAttribute('data-file');
@@ -374,7 +377,7 @@ function setupEventDelegation() {
 
         if (act === 'save-config') saveConfig(btn);
         
-        // ✨ 图库操作：全选
+        // ✨ 图库操作：全选/反选
         if (act === 'gallery-select-all') {
             const allSelected = state.selected_gallery_files.size === state.gallery.length;
             if (allSelected) state.selected_gallery_files.clear();
@@ -382,22 +385,23 @@ function setupEventDelegation() {
             renderGallery();
         }
         
-        // ✨ 图库操作：精准发送删除请求
+        // ✨ 图库操作：完美删除功能
         if (act === 'gallery-delete-selected') {
-            if (state.selected_gallery_files.size === 0) return showToast("请先点击图片选中要删除的文件", "error");
+            if (state.selected_gallery_files.size === 0) return showToast("请先点击选中要删除的图片", "error");
             if (!confirm(`确定要彻底物理删除这 ${state.selected_gallery_files.size} 张图片吗？该操作不可恢复！`)) return;
             
             btn.disabled = true;
             btn.innerHTML = "删除中...";
             try {
+                // 向后端发送包含文件名的 JSON payload
                 const payload = { filenames: Array.from(state.selected_gallery_files) };
                 const res = await bridge.apiPost("delete_gallery_images", payload);
                 if (res && res.success) {
                     showToast(`成功粉碎 ${res.count} 张图片！`);
-                    state.selected_gallery_files.clear(); // 清空选择池
+                    state.selected_gallery_files.clear();
                     await fetchGallery(); // 重新拉取最新的文件列表
                 } else {
-                    showToast("删除请求未能执行", "error");
+                    showToast("删除请求未能完全执行", "error");
                 }
             } catch(err) { showToast("删除通讯异常", "error"); }
             btn.disabled = false;

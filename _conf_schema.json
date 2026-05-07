@@ -60,6 +60,37 @@
       }
     }
   },
+  "cache_config": {
+    "description": "图片缓存清理",
+    "type": "object",
+    "hint": "只清理插件数据目录下 temp_images 与 user_refs 两个缓存目录里的图片文件；不会清理人设参考图。",
+    "items": {
+      "enable_scheduled_cleanup": {
+        "description": "启用定时清理",
+        "type": "bool",
+        "hint": "启用后按下方间隔自动清空 temp_images 与 user_refs 中的图片缓存。",
+        "default": false
+      },
+      "scheduled_cleanup_interval_hours": {
+        "description": "定时清理间隔（小时）",
+        "type": "int",
+        "hint": "最小 1 小时。到点后会清空两个缓存目录内的图片文件。",
+        "default": 24
+      },
+      "enable_size_limit_cleanup": {
+        "description": "启用容量上限自动清理",
+        "type": "bool",
+        "hint": "启用后，当 temp_images 与 user_refs 图片缓存总量超过上限，会优先删除最旧的缓存图片。",
+        "default": false
+      },
+      "max_cache_size_mb": {
+        "description": "缓存容量上限（MB）",
+        "type": "int",
+        "hint": "仅在启用容量上限自动清理时生效，最小 1 MB。",
+        "default": 512
+      }
+    }
+  },
   "reply_config": {
     "description": "指令回复文案",
     "type": "object",

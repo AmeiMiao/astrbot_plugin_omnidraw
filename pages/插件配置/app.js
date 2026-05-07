@@ -3,6 +3,13 @@ const defaultReplyConfig = {
     selfie_pending_message: "ℹ️ 正在为「{persona_name}」生成自拍，请稍候..."
 };
 
+const defaultCacheConfig = {
+    enable_scheduled_cleanup: false,
+    scheduled_cleanup_interval_hours: 24,
+    enable_size_limit_cleanup: false,
+    max_cache_size_mb: 512
+};
+
 const mockConfig = {
     permission_config: { allowed_users: "", blocked_users: "", unlimited_groups: "" },
     usage_config: {
@@ -12,6 +19,7 @@ const mockConfig = {
         checkin_bonus_min: 1,
         checkin_bonus_max: 3
     },
+    cache_config: { ...defaultCacheConfig },
     reply_config: { ...defaultReplyConfig },
     persona_config: {
         active_persona_id: "default",
@@ -52,12 +60,27 @@ const mockUsageStats = {
     quota: { enabled: false, daily_limit: 0 }
 };
 
+const mockCacheStats = {
+    total: { count: 0, bytes: 0, human_size: "0 B" },
+    dirs: {
+        temp_images: { count: 0, bytes: 0, human_size: "0 B" },
+        user_refs: { count: 0, bytes: 0, human_size: "0 B" }
+    },
+    targets: ["temp_images", "user_refs"]
+};
+
 const bridge = window.AstrBotPluginPage || {
     ready: async () => ({}),
-    apiGet: async (name) => JSON.parse(JSON.stringify(name === "get_usage_stats" ? { success: true, stats: mockUsageStats } : mockConfig)),
+    apiGet: async (name) => JSON.parse(JSON.stringify(
+        name === "get_usage_stats"
+            ? { success: true, stats: mockUsageStats }
+            : name === "get_cache_stats"
+                ? { success: true, stats: mockCacheStats }
+                : mockConfig
+    )),
     apiPost: async (_, payload) => {
         console.info("[OmniDraw local preview] save_config", payload);
-        return { success: true };
+        return { success: true, stats: mockCacheStats, cleanup: { deleted_count: 0, human_deleted_size: "0 B" } };
     }
 };
 
@@ -71,6 +94,8 @@ let state = {
         checkin_bonus_max: 3
     },
     usage_stats: { date: "", total: 0, users: [], quota: { enabled: false, daily_limit: 0 } },
+    cache_config: { ...defaultCacheConfig },
+    cache_stats: JSON.parse(JSON.stringify(mockCacheStats)),
     reply_config: { ...defaultReplyConfig },
     persona_config: { active_persona_id: "default", profiles: [], persona_ref_image: [] },
     optimizer_config: {},
@@ -129,6 +154,12 @@ function readNonnegativeIntInput(id, fallback = 0) {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
+function normalizeBool(value) {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value !== 0;
+    return !["", "0", "false", "no", "off", "关闭"].includes(String(value ?? "").trim().toLowerCase());
+}
+
 function normalizeIdText(value) {
     const source = Array.isArray(value)
         ? value.flatMap((item) => String(item || "").split(/[\s,]+/))
@@ -181,6 +212,17 @@ function normalizeUsageConfig(value = {}) {
     };
 }
 
+function normalizeCacheConfig(value = {}) {
+    const interval = parseInt(value.scheduled_cleanup_interval_hours ?? defaultCacheConfig.scheduled_cleanup_interval_hours, 10);
+    const maxMb = parseInt(value.max_cache_size_mb ?? defaultCacheConfig.max_cache_size_mb, 10);
+    return {
+        enable_scheduled_cleanup: normalizeBool(value.enable_scheduled_cleanup),
+        scheduled_cleanup_interval_hours: Number.isFinite(interval) && interval > 0 ? interval : defaultCacheConfig.scheduled_cleanup_interval_hours,
+        enable_size_limit_cleanup: normalizeBool(value.enable_size_limit_cleanup),
+        max_cache_size_mb: Number.isFinite(maxMb) && maxMb > 0 ? maxMb : defaultCacheConfig.max_cache_size_mb
+    };
+}
+
 function normalizeReplyConfig(value = {}) {
     return {
         draw_pending_message: String(value.draw_pending_message ?? defaultReplyConfig.draw_pending_message).trim() || defaultReplyConfig.draw_pending_message,
@@ -221,6 +263,41 @@ function normalizeUsageStats(value = {}) {
             checkin_bonus_max: parseInt(stats.quota?.checkin_bonus_max || 0, 10) || 0
         }
     };
+}
+
+function normalizeCacheStats(value = {}) {
+    const stats = value.stats || value;
+    const dirs = stats.dirs || {};
+    const normalizeDir = (name) => ({
+        count: parseInt(dirs[name]?.count || 0, 10) || 0,
+        bytes: parseInt(dirs[name]?.bytes || 0, 10) || 0,
+        human_size: String(dirs[name]?.human_size || "0 B")
+    });
+    const totalBytes = parseInt(stats.total?.bytes || 0, 10) || 0;
+    return {
+        total: {
+            count: parseInt(stats.total?.count || 0, 10) || 0,
+            bytes: totalBytes,
+            human_size: String(stats.total?.human_size || formatBytes(totalBytes))
+        },
+        dirs: {
+            temp_images: normalizeDir("temp_images"),
+            user_refs: normalizeDir("user_refs")
+        },
+        targets: Array.isArray(stats.targets) ? stats.targets : ["temp_images", "user_refs"]
+    };
+}
+
+function formatBytes(size) {
+    let value = Math.max(0, Number(size) || 0);
+    const units = ["B", "KB", "MB", "GB"];
+    for (const unit of units) {
+        if (value < 1024 || unit === "GB") {
+            return unit === "B" ? `${Math.round(value)} B` : `${value.toFixed(1)} ${unit}`;
+        }
+        value /= 1024;
+    }
+    return `${value.toFixed(1)} GB`;
 }
 
 function formatUsageTime(timestamp) {
@@ -424,6 +501,60 @@ async function loadUsageStats(showToastOnSuccess = false) {
         console.error(error);
         if (showToastOnSuccess) showToast("统计刷新失败", "error");
         renderUsageStats();
+    }
+}
+
+function renderCacheStats() {
+    const stats = normalizeCacheStats(state.cache_stats || {});
+    state.cache_stats = stats;
+    const total = stats.total || {};
+    const temp = stats.dirs?.temp_images || {};
+    const refs = stats.dirs?.user_refs || {};
+    if (byId("cache-total-count")) byId("cache-total-count").textContent = total.count || 0;
+    if (byId("cache-total-size")) byId("cache-total-size").textContent = total.human_size || "0 B";
+    if (byId("cache-temp-count")) byId("cache-temp-count").textContent = temp.count || 0;
+    if (byId("cache-temp-size")) byId("cache-temp-size").textContent = temp.human_size || "0 B";
+    if (byId("cache-refs-count")) byId("cache-refs-count").textContent = refs.count || 0;
+    if (byId("cache-refs-size")) byId("cache-refs-size").textContent = refs.human_size || "0 B";
+}
+
+async function loadCacheStats(showToastOnSuccess = false) {
+    try {
+        const res = await bridge.apiGet("get_cache_stats");
+        state.cache_stats = normalizeCacheStats(res?.stats || res || {});
+        renderCacheStats();
+        if (showToastOnSuccess) showToast("缓存统计已刷新");
+    } catch (error) {
+        console.error(error);
+        if (showToastOnSuccess) showToast("缓存统计刷新失败", "error");
+        renderCacheStats();
+    }
+}
+
+async function clearCache(btn) {
+    const confirmed = window.confirm("确定清理 temp_images 与 user_refs 中的图片缓存吗？人设参考图不会被清理。");
+    if (!confirmed) return;
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    btn.textContent = "清理中...";
+    try {
+        const res = await bridge.apiPost("clear_cache", {});
+        if (res?.success) {
+            state.cache_stats = normalizeCacheStats(res.stats || {});
+            renderCacheStats();
+            const cleanup = res.cleanup || {};
+            showToast(`已清理 ${cleanup.deleted_count || 0} 个图片，释放 ${cleanup.human_deleted_size || "0 B"}`);
+        } else {
+            showToast(res?.message || "缓存清理失败", "error");
+        }
+    } catch (error) {
+        console.error(error);
+        showToast("网络错误", "error");
+    } finally {
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }, 420);
     }
 }
 
@@ -755,6 +886,10 @@ function bindBasicFields() {
     byId("usage_checkin_enable").checked = Boolean(state.usage_config.enable_checkin);
     byId("usage_checkin_min").value = state.usage_config.checkin_bonus_min ?? 1;
     byId("usage_checkin_max").value = state.usage_config.checkin_bonus_max ?? 3;
+    byId("cache_scheduled_enable").checked = Boolean(state.cache_config.enable_scheduled_cleanup);
+    byId("cache_scheduled_hours").value = state.cache_config.scheduled_cleanup_interval_hours || defaultCacheConfig.scheduled_cleanup_interval_hours;
+    byId("cache_limit_enable").checked = Boolean(state.cache_config.enable_size_limit_cleanup);
+    byId("cache_max_mb").value = state.cache_config.max_cache_size_mb || defaultCacheConfig.max_cache_size_mb;
     byId("reply_draw_pending").value = state.reply_config.draw_pending_message || defaultReplyConfig.draw_pending_message;
     byId("reply_selfie_pending").value = state.reply_config.selfie_pending_message || defaultReplyConfig.selfie_pending_message;
     byId("route_img").value = routePrimary("text2img") || "node_1";
@@ -783,6 +918,10 @@ function readBasicFields() {
     if (state.usage_config.checkin_bonus_max < state.usage_config.checkin_bonus_min) {
         state.usage_config.checkin_bonus_max = state.usage_config.checkin_bonus_min;
     }
+    state.cache_config.enable_scheduled_cleanup = byId("cache_scheduled_enable").checked;
+    state.cache_config.scheduled_cleanup_interval_hours = Math.max(1, parseInt(byId("cache_scheduled_hours").value, 10) || defaultCacheConfig.scheduled_cleanup_interval_hours);
+    state.cache_config.enable_size_limit_cleanup = byId("cache_limit_enable").checked;
+    state.cache_config.max_cache_size_mb = Math.max(1, parseInt(byId("cache_max_mb").value, 10) || defaultCacheConfig.max_cache_size_mb);
     state.reply_config.draw_pending_message = byId("reply_draw_pending").value.trim() || defaultReplyConfig.draw_pending_message;
     state.reply_config.selfie_pending_message = byId("reply_selfie_pending").value.trim() || defaultReplyConfig.selfie_pending_message;
     syncRouteFromHidden("text2img");
@@ -804,6 +943,7 @@ function buildPayload() {
     return {
         permission_config: state.permission_config,
         usage_config: state.usage_config,
+        cache_config: state.cache_config,
         reply_config: state.reply_config,
         persona_config: state.persona_config,
         optimizer_config: state.optimizer_config,
@@ -819,6 +959,8 @@ function validateConfig() {
     const checkinMin = readNonnegativeIntInput("usage_checkin_min", 0);
     const checkinMax = readNonnegativeIntInput("usage_checkin_max", 0);
     if (byId("usage_checkin_enable").checked && checkinMax < checkinMin) return "签到奖励最大张数不能小于最小张数";
+    if (byId("cache_scheduled_enable").checked && readNonnegativeIntInput("cache_scheduled_hours", 0) <= 0) return "定时清理间隔必须大于 0";
+    if (byId("cache_limit_enable").checked && readNonnegativeIntInput("cache_max_mb", 0) <= 0) return "缓存容量上限必须大于 0";
 
     readBasicFields();
     const validateList = (list, label) => {
@@ -1029,6 +1171,14 @@ function setupEventDelegation() {
             loadUsageStats(true);
             return;
         }
+        if (act === "refresh-cache") {
+            loadCacheStats(true);
+            return;
+        }
+        if (act === "clear-cache") {
+            clearCache(btn);
+            return;
+        }
         if (act === "switch-persona") {
             switchPersona(idx);
             return;
@@ -1206,6 +1356,7 @@ async function init() {
 
     state.permission_config = normalizePermissionConfig(perm);
     state.usage_config = normalizeUsageConfig(rawConfig.usage_config || {});
+    state.cache_config = normalizeCacheConfig(rawConfig.cache_config || {});
     state.reply_config = normalizeReplyConfig(rawConfig.reply_config || {});
     state.router_config.chain_text2img = joinChain(splitChain(deepFind(route, ["chain_text2img"], "node_1"))) || "node_1";
     state.router_config.chain_selfie = joinChain(splitChain(deepFind(route, ["chain_selfie"], "node_1"))) || "node_1";
@@ -1264,8 +1415,10 @@ async function init() {
     renderVideoProviders();
     renderPersonaImages();
     renderUsageStats();
+    renderCacheStats();
     setupEventDelegation();
     await loadUsageStats(false);
+    await loadCacheStats(false);
     updateMetrics();
     initialized = true;
     savedSnapshot = JSON.stringify(buildPayload());

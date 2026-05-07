@@ -61,6 +61,23 @@ from .utils import handle_errors
 
 PAGE_PREVIEW_IMAGE_BYTES = 80 * 1024 * 1024
 NATIVE_ACTIVE_PERSONA_FILE_PREFIX = "files/persona_config/persona_ref_image/"
+CACHE_DIR_NAMES = ("temp_images", "user_refs")
+CACHE_IMAGE_EXTENSIONS = frozenset({
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".gif",
+    ".bmp",
+    ".avif",
+    ".heic",
+    ".heif",
+    ".tif",
+    ".tiff",
+    ".jfif",
+})
+DEFAULT_CACHE_CLEANUP_INTERVAL_HOURS = 24
+DEFAULT_MAX_CACHE_SIZE_MB = 512
 CONFIG_KEYS = {
     "permission_config",
     "persona_config",
@@ -70,6 +87,7 @@ CONFIG_KEYS = {
     "providers",
     "video_providers",
     "usage_config",
+    "cache_config",
     "reply_config",
     "verbose_report",
 }
@@ -86,6 +104,7 @@ class OmniDrawPlugin(Star):
         self.usage_stats_path = os.path.join(self.data_dir, "omnidraw_usage_stats.json")
         self._usage_stats = self._load_usage_stats()
         self._background_tasks = set()
+        self._cache_cleanup_task: Optional[asyncio.Task] = None
         self._page_image_tokens: Dict[str, str] = {}
         self._native_config = config if hasattr(config, "save_config") else None
         self._native_config_path = str(getattr(config, "config_path", "") or "")
@@ -115,6 +134,18 @@ class OmniDrawPlugin(Star):
             self.get_usage_stats_handler,
             ["GET"],
             "获取万象画卷当日生图统计",
+        )
+        self.context.register_web_api(
+            f"/{PLUGIN_NAME}/get_cache_stats",
+            self.get_cache_stats_handler,
+            ["GET"],
+            "获取万象画卷图片缓存统计",
+        )
+        self.context.register_web_api(
+            f"/{PLUGIN_NAME}/clear_cache",
+            self.clear_cache_handler,
+            ["POST"],
+            "清理万象画卷图片缓存",
         )
         self.context.register_web_api(
             f"/{PLUGIN_NAME}/get_image",
@@ -391,6 +422,23 @@ class OmniDrawPlugin(Star):
             if self._to_nonnegative_int(usage_config.get("checkin_bonus_max", 3), 3) != 3:
                 return True
 
+        cache_config = config.get("cache_config")
+        if isinstance(cache_config, dict):
+            if bool(cache_config.get("enable_scheduled_cleanup")):
+                return True
+            if self._to_nonnegative_int(
+                cache_config.get("scheduled_cleanup_interval_hours", DEFAULT_CACHE_CLEANUP_INTERVAL_HOURS),
+                DEFAULT_CACHE_CLEANUP_INTERVAL_HOURS,
+            ) != DEFAULT_CACHE_CLEANUP_INTERVAL_HOURS:
+                return True
+            if bool(cache_config.get("enable_size_limit_cleanup")):
+                return True
+            if self._to_nonnegative_int(
+                cache_config.get("max_cache_size_mb", DEFAULT_MAX_CACHE_SIZE_MB),
+                DEFAULT_MAX_CACHE_SIZE_MB,
+            ) != DEFAULT_MAX_CACHE_SIZE_MB:
+                return True
+
         reply_config = config.get("reply_config")
         if isinstance(reply_config, dict):
             reply_defaults = {
@@ -487,6 +535,8 @@ class OmniDrawPlugin(Star):
         self.persona_manager = PersonaManager(self.plugin_config)
         self.video_manager = VideoManager(self.plugin_config)
         self.prompt_optimizer = PromptOptimizer(self.plugin_config)
+        self._restart_cache_cleanup_task()
+        self._prune_cache_if_needed("config_reload")
 
     def _persist_config(self) -> None:
         os.makedirs(self.data_dir, exist_ok=True)
@@ -544,6 +594,10 @@ class OmniDrawPlugin(Star):
     async def get_usage_stats_handler(self):
         self._refresh_from_native_config_if_changed()
         return jsonify({"success": True, "stats": self._usage_stats_for_page()})
+
+    async def get_cache_stats_handler(self):
+        self._refresh_from_native_config_if_changed()
+        return jsonify({"success": True, "stats": self._cache_stats_for_page()})
 
     def _config_for_page(self) -> Dict[str, Any]:
         self._page_image_tokens.clear()
@@ -685,6 +739,11 @@ class OmniDrawPlugin(Star):
         logger.info(f"[OmniDraw] 配置已持久化并热重载: {self.config_path}")
         return jsonify({"success": True, "message": "配置已保存，热重载生效。"})
 
+    async def clear_cache_handler(self):
+        self._refresh_from_native_config_if_changed()
+        result = self._clear_cache_images(reason="webui")
+        return jsonify({"success": True, "message": "缓存已清理。", "cleanup": result, "stats": self._cache_stats_for_page()})
+
     def _create_background_task(self, coro: Any) -> asyncio.Task:
         task = asyncio.create_task(coro)
         self._background_tasks.add(task)
@@ -714,7 +773,256 @@ class OmniDrawPlugin(Star):
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         self._background_tasks.clear()
+        self._cache_cleanup_task = None
         logger.info("[OmniDraw] 已取消所有后台视频任务。")
+
+    def _cache_dir_paths(self) -> Dict[str, str]:
+        return {name: os.path.abspath(os.path.join(self.data_dir, name)) for name in CACHE_DIR_NAMES}
+
+    def _is_cache_image_file(self, file_path: str, root_path: str) -> bool:
+        abs_file = os.path.abspath(file_path)
+        abs_root = os.path.abspath(root_path)
+        try:
+            common = os.path.commonpath([abs_root, abs_file])
+        except ValueError:
+            return False
+        if common != abs_root:
+            return False
+        return os.path.splitext(abs_file)[1].lower() in CACHE_IMAGE_EXTENSIONS
+
+    def _iter_cache_image_files(self) -> List[Dict[str, Any]]:
+        files = []
+        for cache_name, root_path in self._cache_dir_paths().items():
+            if not os.path.isdir(root_path):
+                continue
+            for current_root, _, filenames in os.walk(root_path):
+                abs_current_root = os.path.abspath(current_root)
+                try:
+                    if os.path.commonpath([root_path, abs_current_root]) != root_path:
+                        continue
+                except ValueError:
+                    continue
+                for filename in filenames:
+                    file_path = os.path.abspath(os.path.join(abs_current_root, filename))
+                    if not self._is_cache_image_file(file_path, root_path):
+                        continue
+                    try:
+                        stat = os.stat(file_path)
+                    except OSError:
+                        continue
+                    if not os.path.isfile(file_path):
+                        continue
+                    files.append(
+                        {
+                            "cache_name": cache_name,
+                            "path": file_path,
+                            "bytes": max(0, int(stat.st_size)),
+                            "mtime": float(stat.st_mtime),
+                        }
+                    )
+        return files
+
+    def _format_bytes(self, size: int) -> str:
+        value = float(max(0, int(size or 0)))
+        for unit in ("B", "KB", "MB", "GB"):
+            if value < 1024 or unit == "GB":
+                return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} B"
+            value /= 1024
+        return f"{value:.1f} GB"
+
+    def _cache_stats_for_page(self) -> Dict[str, Any]:
+        dir_paths = self._cache_dir_paths()
+        dir_stats = {
+            name: {
+                "path": path,
+                "count": 0,
+                "bytes": 0,
+                "human_size": "0 B",
+            }
+            for name, path in dir_paths.items()
+        }
+
+        files = self._iter_cache_image_files()
+        for item in files:
+            stats = dir_stats.get(item["cache_name"])
+            if not stats:
+                continue
+            stats["count"] += 1
+            stats["bytes"] += item["bytes"]
+
+        total_bytes = 0
+        total_count = 0
+        for stats in dir_stats.values():
+            total_bytes += stats["bytes"]
+            total_count += stats["count"]
+            stats["human_size"] = self._format_bytes(stats["bytes"])
+
+        return {
+            "dirs": dir_stats,
+            "total": {
+                "count": total_count,
+                "bytes": total_bytes,
+                "human_size": self._format_bytes(total_bytes),
+            },
+            "targets": list(CACHE_DIR_NAMES),
+            "image_extensions": sorted(CACHE_IMAGE_EXTENSIONS),
+            "scanned_at": int(time.time()),
+        }
+
+    def _delete_cache_files(
+        self,
+        files: Iterable[Dict[str, Any]],
+        reason: str = "manual",
+        protected_paths: Optional[Iterable[str]] = None,
+    ) -> Dict[str, Any]:
+        dir_paths = self._cache_dir_paths()
+        protected = {os.path.abspath(path) for path in (protected_paths or []) if path}
+        result = {
+            "reason": reason,
+            "deleted_count": 0,
+            "deleted_bytes": 0,
+            "failed_count": 0,
+            "skipped_count": 0,
+            "human_deleted_size": "0 B",
+            "dirs": {
+                name: {"deleted_count": 0, "deleted_bytes": 0, "human_deleted_size": "0 B"}
+                for name in CACHE_DIR_NAMES
+            },
+            "failed": [],
+        }
+
+        for item in files:
+            cache_name = str(item.get("cache_name", ""))
+            file_path = os.path.abspath(str(item.get("path", "")))
+            root_path = dir_paths.get(cache_name)
+            if not file_path or not root_path or file_path in protected:
+                result["skipped_count"] += 1
+                continue
+            if not self._is_cache_image_file(file_path, root_path):
+                result["skipped_count"] += 1
+                continue
+            try:
+                file_size = os.path.getsize(file_path) if os.path.exists(file_path) else int(item.get("bytes", 0))
+                os.remove(file_path)
+                result["deleted_count"] += 1
+                result["deleted_bytes"] += max(0, int(file_size))
+                dir_result = result["dirs"].setdefault(
+                    cache_name,
+                    {"deleted_count": 0, "deleted_bytes": 0, "human_deleted_size": "0 B"},
+                )
+                dir_result["deleted_count"] += 1
+                dir_result["deleted_bytes"] += max(0, int(file_size))
+            except OSError as exc:
+                result["failed_count"] += 1
+                result["failed"].append({"path": file_path, "error": str(exc)})
+
+        result["human_deleted_size"] = self._format_bytes(result["deleted_bytes"])
+        for dir_result in result["dirs"].values():
+            dir_result["human_deleted_size"] = self._format_bytes(dir_result["deleted_bytes"])
+        return result
+
+    def _clear_cache_images(self, reason: str = "manual") -> Dict[str, Any]:
+        before = self._cache_stats_for_page()
+        result = self._delete_cache_files(self._iter_cache_image_files(), reason=reason)
+        result["before"] = before["total"]
+        result["after"] = self._cache_stats_for_page()["total"]
+        logger.info(
+            f"[OmniDraw] 缓存清理完成({reason})：删除 {result['deleted_count']} 个图片文件，"
+            f"释放 {result['human_deleted_size']}。"
+        )
+        return result
+
+    def _cache_size_limit_bytes(self) -> int:
+        configured_mb = self._to_nonnegative_int(
+            getattr(self.plugin_config, "max_cache_size_mb", DEFAULT_MAX_CACHE_SIZE_MB),
+            DEFAULT_MAX_CACHE_SIZE_MB,
+        )
+        return max(1, configured_mb) * 1024 * 1024
+
+    def _prune_cache_if_needed(
+        self,
+        trigger: str = "auto",
+        protected_paths: Optional[Iterable[str]] = None,
+    ) -> Dict[str, Any]:
+        if not getattr(self.plugin_config, "enable_size_limit_cleanup", False):
+            return {"skipped": True, "reason": "size_limit_disabled"}
+
+        files = self._iter_cache_image_files()
+        total_bytes = sum(item["bytes"] for item in files)
+        limit_bytes = self._cache_size_limit_bytes()
+        if total_bytes <= limit_bytes:
+            return {"skipped": True, "reason": "under_limit", "total_bytes": total_bytes, "limit_bytes": limit_bytes}
+
+        protected = {os.path.abspath(path) for path in (protected_paths or []) if path}
+        candidates = sorted(files, key=lambda item: (item.get("mtime", 0), item.get("path", "")))
+        delete_files = []
+        remaining_bytes = total_bytes
+        for item in candidates:
+            if remaining_bytes <= limit_bytes:
+                break
+            file_path = os.path.abspath(str(item.get("path", "")))
+            if file_path in protected:
+                continue
+            delete_files.append(item)
+            remaining_bytes -= item["bytes"]
+
+        if not delete_files:
+            return {
+                "skipped": True,
+                "reason": "only_protected_files_over_limit",
+                "total_bytes": total_bytes,
+                "limit_bytes": limit_bytes,
+            }
+
+        result = self._delete_cache_files(delete_files, reason=f"size_limit:{trigger}", protected_paths=protected)
+        result["before"] = {"bytes": total_bytes, "human_size": self._format_bytes(total_bytes), "count": len(files)}
+        result["after"] = self._cache_stats_for_page()["total"]
+        logger.info(
+            f"[OmniDraw] 缓存达到上限，自动清理 {result['deleted_count']} 个图片文件，"
+            f"释放 {result['human_deleted_size']}。"
+        )
+        return result
+
+    def _cache_cleanup_interval_seconds(self) -> int:
+        configured_hours = self._to_nonnegative_int(
+            getattr(self.plugin_config, "scheduled_cleanup_interval_hours", DEFAULT_CACHE_CLEANUP_INTERVAL_HOURS),
+            DEFAULT_CACHE_CLEANUP_INTERVAL_HOURS,
+        )
+        return max(1, configured_hours) * 3600
+
+    def _restart_cache_cleanup_task(self) -> None:
+        current = getattr(self, "_cache_cleanup_task", None)
+        try:
+            current_task = asyncio.current_task()
+        except RuntimeError:
+            current_task = None
+        if current and not current.done() and current is not current_task:
+            current.cancel()
+        self._cache_cleanup_task = None
+
+        if not getattr(self.plugin_config, "enable_scheduled_cleanup", False):
+            return
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            logger.warning("[OmniDraw] 当前没有运行中的事件循环，定时缓存清理将在下次配置热加载后启动。")
+            return
+
+        self._cache_cleanup_task = self._create_background_task(self._cache_cleanup_scheduler())
+        logger.info(
+            f"[OmniDraw] 已启用定时缓存清理，每 {self._cache_cleanup_interval_seconds() // 3600} 小时清理一次。"
+        )
+
+    async def _cache_cleanup_scheduler(self) -> None:
+        try:
+            while getattr(self.plugin_config, "enable_scheduled_cleanup", False):
+                await asyncio.sleep(self._cache_cleanup_interval_seconds())
+                if not getattr(self.plugin_config, "enable_scheduled_cleanup", False):
+                    return
+                self._clear_cache_images(reason="scheduled")
+        except asyncio.CancelledError:
+            raise
 
     def _get_event_images(self, event: AstrMessageEvent) -> List[str]:
         images = []
@@ -830,6 +1138,7 @@ class OmniDrawPlugin(Star):
                         else:
                             await asyncio.sleep(1)
 
+        self._prune_cache_if_needed("user_refs", protected_paths=processed_paths)
         return processed_paths
 
     def _normalize_count(self, count: Any) -> int:
@@ -1109,6 +1418,7 @@ class OmniDrawPlugin(Star):
             file_path = os.path.join(save_dir, f"img_{uuid.uuid4().hex[:12]}.png")
             with open(file_path, "wb") as file:
                 file.write(base64.b64decode(b64_data, validate=False))
+            self._prune_cache_if_needed("temp_images", protected_paths=[file_path])
             return Image.fromFileSystem(file_path)
         if image_url.startswith("http"):
             return Image.fromURL(image_url)
@@ -1217,11 +1527,23 @@ class OmniDrawPlugin(Star):
             "/切换链路 [画图/自拍/视频/副脑] [节点ID]\n"
             "/切换模型 [画图/自拍/视频] [序号或名称]\n"
             "/签到\n"
+            "/清理缓存\n"
             "/万象帮助\n\n"
         )
         if self.plugin_config.presets:
             msg += "✨ 极速宏:\n" + "\n".join([f"/{preset}" for preset in self.plugin_config.presets.keys()])
         yield event.plain_result(msg)
+
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    @filter.command("清理缓存")
+    @handle_errors
+    async def cmd_clear_cache(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
+        result = self._clear_cache_images(reason="command")
+        yield event.plain_result(
+            f"{MessageEmoji.SUCCESS} 缓存清理完成：删除 {result['deleted_count']} 个图片文件，"
+            f"释放 {result['human_deleted_size']}。\n"
+            "范围：仅 temp_images 与 user_refs 内的图片文件。"
+        )
 
     @filter.command("签到")
     @handle_errors

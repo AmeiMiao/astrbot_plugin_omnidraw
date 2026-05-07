@@ -1,3 +1,8 @@
+const defaultReplyConfig = {
+    draw_pending_message: "🎨 收到灵感，正在绘制...",
+    selfie_pending_message: "ℹ️ 正在为「{persona_name}」生成自拍，请稍候..."
+};
+
 const mockConfig = {
     permission_config: { allowed_users: "", blocked_users: "", unlimited_groups: "" },
     usage_config: {
@@ -7,6 +12,7 @@ const mockConfig = {
         checkin_bonus_min: 1,
         checkin_bonus_max: 3
     },
+    reply_config: { ...defaultReplyConfig },
     persona_config: {
         active_persona_id: "default",
         persona_name: "默认助理",
@@ -65,6 +71,7 @@ let state = {
         checkin_bonus_max: 3
     },
     usage_stats: { date: "", total: 0, users: [], quota: { enabled: false, daily_limit: 0 } },
+    reply_config: { ...defaultReplyConfig },
     persona_config: { active_persona_id: "default", profiles: [], persona_ref_image: [] },
     optimizer_config: {},
     router_config: {},
@@ -152,6 +159,13 @@ function normalizeUsageConfig(value = {}) {
         enable_checkin: Boolean(value.enable_checkin),
         checkin_bonus_min: normalizedMin,
         checkin_bonus_max: Math.max(normalizedMin, normalizedMax)
+    };
+}
+
+function normalizeReplyConfig(value = {}) {
+    return {
+        draw_pending_message: String(value.draw_pending_message ?? defaultReplyConfig.draw_pending_message).trim() || defaultReplyConfig.draw_pending_message,
+        selfie_pending_message: String(value.selfie_pending_message ?? defaultReplyConfig.selfie_pending_message).trim() || defaultReplyConfig.selfie_pending_message
     };
 }
 
@@ -559,6 +573,8 @@ function bindBasicFields() {
     byId("usage_checkin_enable").checked = Boolean(state.usage_config.enable_checkin);
     byId("usage_checkin_min").value = state.usage_config.checkin_bonus_min ?? 1;
     byId("usage_checkin_max").value = state.usage_config.checkin_bonus_max ?? 3;
+    byId("reply_draw_pending").value = state.reply_config.draw_pending_message || defaultReplyConfig.draw_pending_message;
+    byId("reply_selfie_pending").value = state.reply_config.selfie_pending_message || defaultReplyConfig.selfie_pending_message;
     byId("route_img").value = state.router_config.chain_text2img || "node_1";
     byId("route_selfie").value = state.router_config.chain_selfie || "node_1";
     byId("route_video").value = state.router_config.chain_video || "video_node_1";
@@ -585,6 +601,8 @@ function readBasicFields() {
     if (state.usage_config.checkin_bonus_max < state.usage_config.checkin_bonus_min) {
         state.usage_config.checkin_bonus_max = state.usage_config.checkin_bonus_min;
     }
+    state.reply_config.draw_pending_message = byId("reply_draw_pending").value.trim() || defaultReplyConfig.draw_pending_message;
+    state.reply_config.selfie_pending_message = byId("reply_selfie_pending").value.trim() || defaultReplyConfig.selfie_pending_message;
     state.router_config.chain_text2img = byId("route_img").value.trim();
     state.router_config.chain_selfie = byId("route_selfie").value.trim();
     state.router_config.chain_video = byId("route_video").value.trim();
@@ -604,6 +622,7 @@ function buildPayload() {
     return {
         permission_config: state.permission_config,
         usage_config: state.usage_config,
+        reply_config: state.reply_config,
         persona_config: state.persona_config,
         optimizer_config: state.optimizer_config,
         router_config: state.router_config,
@@ -985,6 +1004,7 @@ async function init() {
 
     state.permission_config = normalizePermissionConfig(perm);
     state.usage_config = normalizeUsageConfig(rawConfig.usage_config || {});
+    state.reply_config = normalizeReplyConfig(rawConfig.reply_config || {});
     state.router_config.chain_text2img = deepFind(route, ["chain_text2img"], "node_1");
     state.router_config.chain_selfie = deepFind(route, ["chain_selfie"], "node_1");
     state.router_config.chain_video = deepFind(route, ["chain_video"], "video_node_1");

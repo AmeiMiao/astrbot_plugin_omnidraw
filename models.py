@@ -9,9 +9,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .constants import DEFAULT_DRAW_PENDING_MESSAGE, DEFAULT_SELFIE_PENDING_MESSAGE
+
 PLUGIN_NAME = "astrbot_plugin_omnidraw"
 PLUGIN_AUTHOR = "雪碧bir"
-PLUGIN_VERSION = "3.3.6"
+PLUGIN_VERSION = "3.3.7"
 
 
 @dataclass
@@ -72,6 +74,8 @@ class PluginConfig:
     checkin_bonus_max: int
     optimizer_style: str
     optimizer_custom_prompt: str
+    draw_pending_message: str
+    selfie_pending_message: str
     verbose_report: bool
 
     @classmethod
@@ -109,6 +113,7 @@ class PluginConfig:
         router_conf = _ensure_dict(config_dict, "router_config")
         perm_conf = _ensure_dict(config_dict, "permission_config")
         usage_conf = _ensure_dict(config_dict, "usage_config")
+        reply_conf = _ensure_dict(config_dict, "reply_config")
 
         for legacy_key in ("persona_name", "persona_base_prompt", "persona_ref_image", "persona_ref_images"):
             if legacy_key in config_dict and legacy_key not in persona_conf:
@@ -161,6 +166,17 @@ class PluginConfig:
         usage_conf["checkin_bonus_min"] = checkin_bonus_min
         usage_conf["checkin_bonus_max"] = checkin_bonus_max
 
+        draw_pending_message = _normalize_reply_text(
+            reply_conf.get("draw_pending_message"),
+            DEFAULT_DRAW_PENDING_MESSAGE,
+        )
+        selfie_pending_message = _normalize_reply_text(
+            reply_conf.get("selfie_pending_message"),
+            DEFAULT_SELFIE_PENDING_MESSAGE,
+        )
+        reply_conf["draw_pending_message"] = draw_pending_message
+        reply_conf["selfie_pending_message"] = selfie_pending_message
+
         return cls(
             providers=providers,
             video_providers=video_providers,
@@ -187,6 +203,8 @@ class PluginConfig:
             checkin_bonus_max=checkin_bonus_max,
             optimizer_style=str(opt_conf.get("optimizer_style", "手机日常原生感")).strip() or "手机日常原生感",
             optimizer_custom_prompt=str(opt_conf.get("optimizer_custom_prompt", "")),
+            draw_pending_message=draw_pending_message,
+            selfie_pending_message=selfie_pending_message,
             verbose_report=_to_bool(config_dict.get("verbose_report", False)),
         )
 
@@ -322,6 +340,11 @@ def _merge_unique_values(*values: Any) -> List[str]:
             seen.add(item)
             merged.append(item)
     return merged
+
+
+def _normalize_reply_text(value: Any, default: str) -> str:
+    text = str(value or "").strip()
+    return text or default
 
 
 def _to_bool(value: Any) -> bool:

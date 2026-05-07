@@ -44,7 +44,13 @@ except Exception:
     def get_astrbot_data_path() -> str:
         return os.path.join(os.getcwd(), "data")
 
-from .constants import DEFAULT_BATCH_LIMIT, MAX_IMAGE_BYTES, MessageEmoji
+from .constants import (
+    DEFAULT_BATCH_LIMIT,
+    DEFAULT_DRAW_PENDING_MESSAGE,
+    DEFAULT_SELFIE_PENDING_MESSAGE,
+    MAX_IMAGE_BYTES,
+    MessageEmoji,
+)
 from .core.chain_manager import ChainManager
 from .core.parser import CommandParser
 from .core.persona_manager import PersonaManager
@@ -64,6 +70,7 @@ CONFIG_KEYS = {
     "providers",
     "video_providers",
     "usage_config",
+    "reply_config",
     "verbose_report",
 }
 
@@ -383,6 +390,17 @@ class OmniDrawPlugin(Star):
                 return True
             if self._to_nonnegative_int(usage_config.get("checkin_bonus_max", 3), 3) != 3:
                 return True
+
+        reply_config = config.get("reply_config")
+        if isinstance(reply_config, dict):
+            reply_defaults = {
+                "draw_pending_message": DEFAULT_DRAW_PENDING_MESSAGE,
+                "selfie_pending_message": DEFAULT_SELFIE_PENDING_MESSAGE,
+            }
+            for key, default in reply_defaults.items():
+                value = str(reply_config.get(key, "")).strip()
+                if value and value != default:
+                    return True
 
         router_config = config.get("router_config")
         if isinstance(router_config, dict):
@@ -1162,6 +1180,20 @@ class OmniDrawPlugin(Star):
         _, parsed = self.cmd_parser.parse(extra_params)
         return parsed
 
+    def _format_pending_message(self, template: str, default: str, **values: Any) -> str:
+        raw_template = str(template or "").strip() or default
+
+        class _SafeValues(dict):
+            def __missing__(self, key: str) -> str:
+                return "{" + key + "}"
+
+        safe_values = _SafeValues({key: str(value) for key, value in values.items()})
+        try:
+            formatted = raw_template.format_map(safe_values)
+        except Exception:
+            formatted = raw_template
+        return formatted.strip() or default
+
     async def _send_generated_images(self, event: AstrMessageEvent, urls: Iterable[str]) -> int:
         sent = 0
         for url in urls:
@@ -1413,7 +1445,15 @@ class OmniDrawPlugin(Star):
         preset_prompt = self.plugin_config.presets[cmd_name]
         safe_refs = await self._process_and_save_images(raw_refs)
 
-        msg = f"{MessageEmoji.PAINTING} 收到灵感，正在绘制..."
+        msg = self._format_pending_message(
+            self.plugin_config.draw_pending_message,
+            DEFAULT_DRAW_PENDING_MESSAGE,
+            command=cmd_name,
+            prompt=preset_prompt,
+            ref_count=len(safe_refs),
+            param_count=0,
+            persona_name=self.plugin_config.persona_name,
+        )
         if self.plugin_config.verbose_report:
             msg += f"\n📝 宏对应提示词: {preset_prompt}\n🖼️ 实际参考图：{len(safe_refs)} 张"
         yield event.plain_result(msg)
@@ -1467,7 +1507,15 @@ class OmniDrawPlugin(Star):
         if safe_refs:
             kwargs["user_refs"] = safe_refs
 
-        msg = f"{MessageEmoji.PAINTING} 收到灵感，正在绘制..."
+        msg = self._format_pending_message(
+            self.plugin_config.draw_pending_message,
+            DEFAULT_DRAW_PENDING_MESSAGE,
+            command="画",
+            prompt=prompt,
+            ref_count=len(safe_refs),
+            param_count=param_count,
+            persona_name=self.plugin_config.persona_name,
+        )
         if self.plugin_config.verbose_report:
             msg += f"\n📝 最终提示词: {prompt}\n⚙️ 附加参数：{param_count} 个\n🖼️ 实际参考图：{len(safe_refs)} 张"
         yield event.plain_result(msg)
@@ -1520,7 +1568,16 @@ class OmniDrawPlugin(Star):
             if not raw_refs:
                 extra_kwargs.pop("persona_ref", None)
 
-        msg = f"{MessageEmoji.INFO} 正在为「{self.plugin_config.persona_name}」生成自拍，请稍候..."
+        msg = self._format_pending_message(
+            self.plugin_config.selfie_pending_message,
+            DEFAULT_SELFIE_PENDING_MESSAGE,
+            command="自拍",
+            prompt=final_prompt,
+            user_input=user_input,
+            ref_count=len(safe_refs),
+            param_count=len(kwargs),
+            persona_name=self.plugin_config.persona_name,
+        )
         if self.plugin_config.verbose_report:
             msg += f"\n📝 构建提示词: {final_prompt}\n⚙️ 附加参数：{len(kwargs)} 个\n🖼️ 实际参考图：{len(safe_refs)} 张"
         yield event.plain_result(msg)

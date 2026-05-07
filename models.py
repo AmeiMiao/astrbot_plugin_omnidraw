@@ -13,7 +13,9 @@ from .constants import DEFAULT_DRAW_PENDING_MESSAGE, DEFAULT_SELFIE_PENDING_MESS
 
 PLUGIN_NAME = "astrbot_plugin_omnidraw"
 PLUGIN_AUTHOR = "雪碧bir"
-PLUGIN_VERSION = "3.3.8"
+PLUGIN_VERSION = "3.3.9"
+DEFAULT_CACHE_CLEANUP_INTERVAL_HOURS = 24
+DEFAULT_MAX_CACHE_SIZE_MB = 512
 
 
 @dataclass
@@ -72,6 +74,10 @@ class PluginConfig:
     enable_checkin: bool
     checkin_bonus_min: int
     checkin_bonus_max: int
+    enable_scheduled_cleanup: bool
+    scheduled_cleanup_interval_hours: int
+    enable_size_limit_cleanup: bool
+    max_cache_size_mb: int
     optimizer_style: str
     optimizer_custom_prompt: str
     draw_pending_message: str
@@ -113,6 +119,7 @@ class PluginConfig:
         router_conf = _ensure_dict(config_dict, "router_config")
         perm_conf = _ensure_dict(config_dict, "permission_config")
         usage_conf = _ensure_dict(config_dict, "usage_config")
+        cache_conf = _ensure_dict(config_dict, "cache_config")
         reply_conf = _ensure_dict(config_dict, "reply_config")
 
         for legacy_key in ("persona_name", "persona_base_prompt", "persona_ref_image", "persona_ref_images"):
@@ -166,6 +173,23 @@ class PluginConfig:
         usage_conf["checkin_bonus_min"] = checkin_bonus_min
         usage_conf["checkin_bonus_max"] = checkin_bonus_max
 
+        enable_scheduled_cleanup = _to_bool(cache_conf.get("enable_scheduled_cleanup", False) or False)
+        scheduled_cleanup_interval_hours = _to_int(
+            cache_conf.get("scheduled_cleanup_interval_hours", DEFAULT_CACHE_CLEANUP_INTERVAL_HOURS),
+            DEFAULT_CACHE_CLEANUP_INTERVAL_HOURS,
+            minimum=1,
+        )
+        enable_size_limit_cleanup = _to_bool(cache_conf.get("enable_size_limit_cleanup", False) or False)
+        max_cache_size_mb = _to_int(
+            cache_conf.get("max_cache_size_mb", DEFAULT_MAX_CACHE_SIZE_MB),
+            DEFAULT_MAX_CACHE_SIZE_MB,
+            minimum=1,
+        )
+        cache_conf["enable_scheduled_cleanup"] = enable_scheduled_cleanup
+        cache_conf["scheduled_cleanup_interval_hours"] = scheduled_cleanup_interval_hours
+        cache_conf["enable_size_limit_cleanup"] = enable_size_limit_cleanup
+        cache_conf["max_cache_size_mb"] = max_cache_size_mb
+
         draw_pending_message = _normalize_reply_text(
             reply_conf.get("draw_pending_message"),
             DEFAULT_DRAW_PENDING_MESSAGE,
@@ -201,6 +225,10 @@ class PluginConfig:
             enable_checkin=enable_checkin,
             checkin_bonus_min=checkin_bonus_min,
             checkin_bonus_max=checkin_bonus_max,
+            enable_scheduled_cleanup=enable_scheduled_cleanup,
+            scheduled_cleanup_interval_hours=scheduled_cleanup_interval_hours,
+            enable_size_limit_cleanup=enable_size_limit_cleanup,
+            max_cache_size_mb=max_cache_size_mb,
             optimizer_style=str(opt_conf.get("optimizer_style", "手机日常原生感")).strip() or "手机日常原生感",
             optimizer_custom_prompt=str(opt_conf.get("optimizer_custom_prompt", "")),
             draw_pending_message=draw_pending_message,

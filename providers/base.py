@@ -17,17 +17,44 @@ def normalize_base_url(base_url: str) -> str:
     return str(base_url or "").rstrip("/")
 
 
+def _has_endpoint_path(base_url: str, endpoint_suffixes: List[str]) -> bool:
+    lowered = base_url.lower()
+    return any(lowered.endswith(suffix) for suffix in endpoint_suffixes)
+
+
 def build_chat_completions_endpoint(base_url: str) -> str:
     base_url = normalize_base_url(base_url)
     if not base_url:
         return ""
+    if _has_endpoint_path(base_url, ["/chat/completions", "/responses"]):
+        return base_url
     return f"{base_url}/chat/completions" if base_url.endswith("/v1") else f"{base_url}/v1/chat/completions"
+
+
+def build_image_generations_endpoint(base_url: str) -> str:
+    base_url = normalize_base_url(base_url)
+    if not base_url:
+        return ""
+    if _has_endpoint_path(base_url, ["/images/generations", "/images/edits"]):
+        return base_url
+    return f"{base_url}/images/generations"
+
+
+def build_image_edits_endpoint(base_url: str) -> str:
+    base_url = normalize_base_url(base_url)
+    if not base_url:
+        return ""
+    if _has_endpoint_path(base_url, ["/images/generations", "/images/edits"]):
+        return base_url
+    return f"{base_url}/images/edits"
 
 
 def build_video_generations_endpoint(base_url: str) -> str:
     base_url = normalize_base_url(base_url)
     if not base_url:
         return ""
+    if _has_endpoint_path(base_url, ["/videos/generations"]):
+        return base_url
     return f"{base_url}/videos/generations"
 
 

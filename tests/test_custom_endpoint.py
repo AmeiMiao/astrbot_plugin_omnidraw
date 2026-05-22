@@ -210,6 +210,27 @@ class CustomEndpointHelpersTest(unittest.TestCase):
         self.assertIn("<redacted>", message)
         self.assertIn("<image_base64", message)
 
+    def test_error_message_sanitizes_base64_in_result_fields(self):
+        raw_image = base64.b64encode(b"result-image" * 40).decode("ascii")
+        payload = {
+            "error": {
+                "message": {
+                    "output": [
+                        {"type": "image_generation_call", "result": raw_image},
+                    ],
+                    "data": raw_image,
+                }
+            }
+        }
+
+        summary = summarize_payload_for_log(payload)
+        message = extract_error_message(json.dumps(payload))
+
+        self.assertNotIn(raw_image[:40], str(summary))
+        self.assertNotIn(raw_image[:40], message)
+        self.assertIn("<image_base64", str(summary))
+        self.assertIn("<image_base64", message)
+
     def test_plain_text_log_summary_redacts_embedded_secrets_and_data_urls(self):
         image_data_url = "data:image/png;base64," + _long_b64()
         text = "API key: AIzaSyExampleSecret123456789 failed for image " + image_data_url + ". prompt: draw a cat"

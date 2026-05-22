@@ -85,7 +85,7 @@ class OpenAIChatProvider(BaseProvider):
             "text": full_prompt
         })
         
-        logger.info(f"📝 [Chat/Vision通道] 最终发送给 API 的核心提示词:\n{prompt}")
+        logger.info(f"📝 [Chat/Vision通道] 最终发送给 API 的核心提示词:\n{full_prompt}")
 
         payload = {
             "model": self.config.model,

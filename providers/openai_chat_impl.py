@@ -3,13 +3,18 @@ AstrBot 万象画卷插件 v3.1 - OpenAI Chat 兼容实现
 功能：支持高阶多模态参数动态透传 (兼容 Midjourney/Gemini 等走 Chat 通道的代理节点)
 """
 import aiohttp
-import re
 import json
 import base64
 from typing import Any
 from astrbot.api import logger
 
-from .base import BaseProvider, build_chat_completions_endpoint, guess_image_content_type
+from .base import (
+    BaseProvider,
+    build_chat_completions_endpoint,
+    extract_error_message,
+    extract_image_url_from_response,
+    guess_image_content_type,
+)
 
 class OpenAIChatProvider(BaseProvider):
 
@@ -111,22 +116,10 @@ class OpenAIChatProvider(BaseProvider):
             status = response.status
             if status != 200:
                 error_text = await response.text()
-                raise RuntimeError("HTTP " + str(status) + ": " + error_text)
+                raise RuntimeError("HTTP " + str(status) + ": " + extract_error_message(error_text))
             
             result = await response.json()
-            if "choices" in result and len(result["choices"]) > 0:
-                content = result["choices"][0].get("message", {}).get("content", "")
-                if isinstance(content, list):
-                    content = "\n".join(str(item.get("text", item)) if isinstance(item, dict) else str(item) for item in content)
-                content = str(content).strip()
-                match = re.search(r'!\[.*?\]\((.*?)\)', content)
-                if match:
-                    return match.group(1)
-                match = re.search(r'(https?://[^\s\]\)"\']+)', content)
-                if match:
-                    return match.group(1)
-                if content.startswith("http") or content.startswith("data:image"):
-                    return content
-                raise ValueError("Chat接口未返回有效图片链接。模型原话: " + content)
-            else:
-                raise ValueError("API返回结构异常: " + str(result))
+            image_url = extract_image_url_from_response(result, self.config.base_url)
+            if image_url:
+                return image_url
+            raise ValueError("Chat接口未返回有效图片链接。API原始返回: " + str(result))

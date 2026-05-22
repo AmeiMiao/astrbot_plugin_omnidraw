@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.3.12
+
+- 图像 Provider 新增 `custom_endpoint` 自定义完整路径模式，配置页显示为“自定义”。
+- 自定义模式只请求填写的完整 URL，不再自动追加 `/v1`、`/images/generations`、`/images/edits` 或 `/chat/completions`。
+- 增强图像返回解析，兼容 OpenAI Images、Chat Completions、Responses API 以及常见中转站的 URL/Base64 返回格式。
+
 ## 3.3.11
 
 - 新增“可使用人员白名单”：留空时默认不启用；填写后仅名单内用户可调用插件指令和 LLM 工具。

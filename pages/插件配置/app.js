@@ -833,7 +833,8 @@ function renderProviderCard(p, i, isVideo) {
         ]
         : [
             ["openai_image", "标准生图"],
-            ["openai_chat", "对话透传"]
+            ["openai_chat", "对话透传"],
+            ["custom_endpoint", "自定义"]
         ];
 
     const modeChips = modes.map(([value, label]) => {
@@ -968,6 +969,20 @@ function buildPayload() {
     };
 }
 
+function isCompleteCustomEndpoint(value) {
+    try {
+        const url = new URL(String(value || "").trim());
+        if (!["http:", "https:"].includes(url.protocol)) return false;
+        const segments = url.pathname.split("/").filter(Boolean);
+        if (!segments.length) return false;
+        const last = segments[segments.length - 1] || "";
+        if (/^v\d+(beta\d*)?$/i.test(last) || last.toLowerCase() === "api") return false;
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 function validateConfig() {
     const checkinMin = readNonnegativeIntInput("usage_checkin_min", 0);
     const checkinMax = readNonnegativeIntInput("usage_checkin_max", 0);
@@ -981,6 +996,8 @@ function validateConfig() {
         const duplicates = ids.filter((id, idx) => ids.indexOf(id) !== idx);
         if (list.some((node) => !String(node.id || "").trim())) return `${label}存在未填写节点 ID`;
         if (duplicates.length) return `${label}节点 ID 重复：${duplicates[0]}`;
+        const invalidCustom = list.find((node) => node.api_type === "custom_endpoint" && !isCompleteCustomEndpoint(node.base_url));
+        if (invalidCustom) return `${label}自定义节点 ${invalidCustom.id || ""} 必须填写完整 http(s) 请求路径，不能只填域名或 /v1`;
         return "";
     };
     const validateRoute = (routeName, label) => {

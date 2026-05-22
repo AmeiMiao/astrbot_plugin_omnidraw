@@ -173,15 +173,16 @@
             "type": "string",
             "options": [
               "openai_image",
-              "openai_chat"
+              "openai_chat",
+              "custom_endpoint"
             ],
-            "hint": "openai_image 适合标准图片接口；openai_chat 适合通过 chat/completions 透传生图的中转站。",
+            "hint": "openai_image 适合标准图片接口；openai_chat 适合会返回图片链接的 chat/completions 中转站；custom_endpoint 为自定义完整路径，只请求你填写的完整 URL，不会追加 /v1、/images/generations 或 /chat/completions。",
             "default": "openai_image"
           },
           "base_url": {
             "description": "接口地址",
             "type": "string",
-            "hint": "通常需要包含 /v1，例如 https://api.example.com/v1。",
+            "hint": "标准/对话模式通常填写 https://api.example.com/v1；自定义模式必须填写完整请求路径，例如 https://api.example.com/v1/images/generations。",
             "default": ""
           },
           "api_keys": {

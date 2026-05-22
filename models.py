@@ -17,7 +17,7 @@ from .utils import save_image_bytes, split_data_url
 
 PLUGIN_NAME = "astrbot_plugin_omnidraw"
 PLUGIN_AUTHOR = "雪碧bir"
-PLUGIN_VERSION = "3.3.11"
+PLUGIN_VERSION = "3.3.12"
 DEFAULT_CACHE_CLEANUP_INTERVAL_HOURS = 24
 DEFAULT_MAX_CACHE_SIZE_MB = 512
 
@@ -335,6 +335,8 @@ def _normalize_api_type(value: Any, is_video: bool) -> str:
         if "sync" in lowered or "同步" in raw:
             return "openai_sync"
         return "async_task"
+    if lowered in {"custom_endpoint", "custom"} or "自定义" in raw:
+        return "custom_endpoint"
     if "chat" in lowered or "对话" in raw:
         return "openai_chat"
     return "openai_image"

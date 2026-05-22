@@ -1,6 +1,5 @@
 import aiohttp
 import base64
-import json
 from typing import Any
 
 from astrbot.api import logger
@@ -12,6 +11,9 @@ from .base import (
     extract_error_message,
     extract_image_url_from_response,
     guess_image_content_type,
+    summarize_payload_json_for_log,
+    summarize_response_text_for_log,
+    summarize_text_for_log,
 )
 
 class OpenAIProvider(BaseProvider):
@@ -53,7 +55,7 @@ class OpenAIProvider(BaseProvider):
         base_url = self.config.base_url
         ref_images = self.get_reference_images(**kwargs)
 
-        logger.info(f"📝 [标准通道] 最终发送给 API 的核心提示词:\n{prompt}")
+        logger.info(f"📝 [标准通道] 最终提示词摘要: {summarize_text_for_log(prompt, key_hint='prompt')}")
 
         # 🚀 剥离内置参数，剩下的全是用户或 LLM 透传的高级参数
         internal_keys = {"user_refs", "user_ref", "persona_refs", "persona_ref"}
@@ -77,7 +79,7 @@ class OpenAIProvider(BaseProvider):
                     payload["image" if idx == 1 else f"image{idx}"] = image_value
                 payload.update(api_kwargs)
                 log_payload = {k: v for k, v in payload.items() if not str(k).startswith("image")}
-                logger.info(f"📤 [标准通道] 附带高级参数的请求体:\n{json.dumps(log_payload, ensure_ascii=False)}")
+                logger.info(f"📤 [标准通道] 附带高级参数的请求体摘要: {summarize_payload_json_for_log(log_payload)}")
                 headers = {"Content-Type": "application/json", "Authorization": "Bearer " + current_key}
                 timeout_obj = aiohttp.ClientTimeout(total=self.config.timeout)
                 async with self.session.post(url, json=payload, headers=headers, timeout=timeout_obj) as response:
@@ -123,7 +125,7 @@ class OpenAIProvider(BaseProvider):
             # 暴力将所有高级参数塞入 JSON 的最外层，中转 API 会直接识别并调用底层
             payload.update(api_kwargs)
 
-            logger.info(f"📤 [标准通道] 附带高级参数的请求体:\n{json.dumps(payload, ensure_ascii=False)}")
+            logger.info(f"📤 [标准通道] 附带高级参数的请求体摘要: {summarize_payload_json_for_log(payload)}")
 
             headers = {"Content-Type": "application/json", "Authorization": "Bearer " + current_key}
 
@@ -135,7 +137,7 @@ class OpenAIProvider(BaseProvider):
         status = response.status
         if status != 200:
             error_text = await response.text()
-            logger.error("💥 API 返回错误:\n" + error_text)
+            logger.error("💥 API 返回错误摘要: " + summarize_response_text_for_log(error_text, max_string_length=500))
             error_msg = extract_error_message(error_text)
 
             raise RuntimeError("HTTP " + str(status) + ": " + error_msg)
@@ -145,4 +147,7 @@ class OpenAIProvider(BaseProvider):
         if image_url:
             return image_url
 
-        raise ValueError("API 返回结构异常，未找到图片数据: " + str(result))
+        raise ValueError(
+            "API 返回结构异常，未找到图片数据: "
+            + summarize_payload_json_for_log(result, max_string_length=500)
+        )

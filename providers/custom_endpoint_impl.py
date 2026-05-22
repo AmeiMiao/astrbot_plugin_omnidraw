@@ -15,6 +15,10 @@ from .base import (
     extract_image_url_from_response,
     guess_image_content_type,
     is_complete_endpoint_url,
+    summarize_payload_json_for_log,
+    summarize_response_text_for_log,
+    summarize_text_for_log,
+    summarize_url_for_log,
 )
 
 
@@ -65,20 +69,6 @@ class CustomEndpointProvider(BaseProvider):
     def _endpoint_path(self, endpoint: str) -> str:
         return urlparse(endpoint).path.rstrip("/").lower()
 
-    def _redact_for_log(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        redacted: Dict[str, Any] = {}
-        for key, value in payload.items():
-            if key == "image" or key.startswith("image") or key in {"reference_images"}:
-                if isinstance(value, list):
-                    redacted[key] = [f"<image:{idx + 1}>" for idx, _ in enumerate(value)]
-                elif value:
-                    redacted[key] = "<image>"
-                else:
-                    redacted[key] = value
-            else:
-                redacted[key] = value
-        return redacted
-
     def _build_chat_payload(self, prompt: str, encoded_images: List[str], api_kwargs: Dict[str, Any]) -> Dict[str, Any]:
         content: List[Dict[str, Any]] = []
         for image_url in encoded_images:
@@ -128,8 +118,8 @@ class CustomEndpointProvider(BaseProvider):
 
     async def _post_json(self, endpoint: str, headers: Dict[str, str], payload: Dict[str, Any]) -> str:
         timeout_obj = aiohttp.ClientTimeout(total=self.config.timeout)
-        logger.info(f"📤 [自定义通道] 请求完整路径: {endpoint}")
-        logger.info(f"📤 [自定义通道] 请求体:\n{json.dumps(self._redact_for_log(payload), ensure_ascii=False)}")
+        logger.info(f"📤 [自定义通道] 请求完整路径: {summarize_url_for_log(endpoint)}")
+        logger.info(f"📤 [自定义通道] 请求体摘要: {summarize_payload_json_for_log(payload)}")
         async with self.session.post(endpoint, json=payload, headers=headers, timeout=timeout_obj) as response:
             return await self._parse_response(response, endpoint)
 
@@ -160,14 +150,14 @@ class CustomEndpointProvider(BaseProvider):
             data.add_field(key, str(value))
 
         timeout_obj = aiohttp.ClientTimeout(total=self.config.timeout)
-        logger.info(f"📤 [自定义通道] 以 multipart 请求完整路径: {endpoint}")
+        logger.info(f"📤 [自定义通道] 以 multipart 请求完整路径: {summarize_url_for_log(endpoint)}")
         async with self.session.post(endpoint, data=data, headers=headers, timeout=timeout_obj) as response:
             return await self._parse_response(response, endpoint)
 
     async def _parse_response(self, response: aiohttp.ClientResponse, endpoint: str) -> str:
         text = await response.text()
         if response.status >= 400:
-            logger.error("💥 自定义通道 API 返回错误:\n" + text)
+            logger.error("💥 自定义通道 API 返回错误摘要: " + summarize_response_text_for_log(text, max_string_length=500))
             raise RuntimeError(f"HTTP {response.status}: {extract_error_message(text)}")
 
         try:
@@ -178,7 +168,11 @@ class CustomEndpointProvider(BaseProvider):
         image_url = extract_image_url_from_response(payload, endpoint)
         if image_url:
             return image_url
-        raise ValueError("自定义接口返回结构异常，未找到图片数据: " + str(payload))
+        if isinstance(payload, (dict, list, tuple)):
+            payload_summary = summarize_payload_json_for_log(payload, max_string_length=500)
+        else:
+            payload_summary = summarize_text_for_log(str(payload), max_string_length=500)
+        raise ValueError("自定义接口返回结构异常，未找到图片数据: " + payload_summary)
 
     async def generate_image(self, prompt: str, **kwargs: Any) -> str:
         current_key = self.get_current_key()
@@ -194,7 +188,7 @@ class CustomEndpointProvider(BaseProvider):
         api_kwargs = {key: value for key, value in kwargs.items() if key not in internal_keys}
         headers = {"Authorization": "Bearer " + current_key}
 
-        logger.info(f"📝 [自定义通道] 最终发送给 API 的核心提示词:\n{prompt}")
+        logger.info(f"📝 [自定义通道] 最终提示词摘要: {summarize_text_for_log(prompt, key_hint='prompt')}")
 
         if endpoint_path.endswith("/images/edits") and not ref_images:
             raise ValueError("自定义 /images/edits 完整路径需要至少一张参考图。")

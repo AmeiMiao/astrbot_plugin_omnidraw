@@ -8,7 +8,7 @@ import re
 import threading
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Iterable, Optional, List
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qsl, urljoin, urlparse, urlunparse
 from astrbot.api import logger
 from ..models import ProviderConfig
 
@@ -156,33 +156,153 @@ def guess_image_content_type(image_path_or_url: str, content_type: str = "", fal
     return guessed if guessed.startswith("image/") else fallback
 
 
+SENSITIVE_LOG_KEY_MARKERS = ("key", "token", "secret", "authorization", "password")
+IMAGE_LOG_KEY_MARKERS = ("image", "b64", "base64", "binary_data")
+PROMPT_LOG_KEY_MARKERS = ("prompt", "input_text")
+TEXT_PROMPT_LOG_KEYS = {"text", "input"}
+DATA_IMAGE_URL_RE = re.compile(r"data:image/[A-Za-z0-9.+-]+;base64,[A-Za-z0-9+/=]+", re.IGNORECASE)
+BEARER_TOKEN_RE = re.compile(r"(?i)(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}")
+SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)\b(api[\s_-]*key|access[\s_-]*token|client[\s_-]*secret|token|secret|authorization|password)\b"
+    r"\s*[:=]\s*['\"]?[^'\"\s,;}]+"
+)
+PROMPT_ASSIGNMENT_RE = re.compile(
+    r"(?i)\b(prompt|negative[\s_-]*prompt|input[\s_-]*text)\b\s*[:=]\s*['\"]?[^'\"\n\r;}]+"
+)
+OPENAI_STYLE_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9][A-Za-z0-9_-]{7,}\b")
+
+
 def extract_error_message(payload: Any) -> str:
     if isinstance(payload, str):
         try:
             payload = json.loads(payload)
         except Exception:
-            return payload
+            return summarize_text_for_log(payload, max_string_length=240)
 
     if not isinstance(payload, dict):
-        return str(payload)
+        if isinstance(payload, (list, tuple)):
+            return summarize_payload_json_for_log(payload, max_string_length=240)
+        return summarize_text_for_log(str(payload), max_string_length=240)
 
     error = payload.get("error")
     if isinstance(error, dict):
         for key in ("message", "msg", "detail", "error_msg", "code"):
-            if error.get(key):
-                return str(error[key])
-        return str(error)
+            value = error.get(key)
+            if value:
+                if isinstance(value, (dict, list, tuple)):
+                    return summarize_payload_json_for_log(value, max_string_length=240)
+                return summarize_text_for_log(str(value), max_string_length=240)
+        return summarize_payload_json_for_log(error, max_string_length=240)
     if error:
-        return str(error)
+        return summarize_text_for_log(str(error), max_string_length=240)
 
     for key in ("message", "msg", "detail", "error_msg"):
         if payload.get(key):
             value = payload[key]
-            if isinstance(value, (dict, list)):
-                return json.dumps(value, ensure_ascii=False)
-            return str(value)
+            if isinstance(value, (dict, list, tuple)):
+                return summarize_payload_json_for_log(value, max_string_length=240)
+            return summarize_text_for_log(str(value), max_string_length=240)
 
-    return json.dumps(payload, ensure_ascii=False)
+    return summarize_payload_json_for_log(payload, max_string_length=240)
+
+
+def _looks_like_base64_blob(text: str) -> bool:
+    compact = re.sub(r"\s+", "", text)
+    if len(compact) < 120 or len(compact) % 4:
+        return False
+    if not re.fullmatch(r"[A-Za-z0-9+/]+={0,2}", compact):
+        return False
+    try:
+        base64.b64decode(compact, validate=True)
+        return True
+    except Exception:
+        return False
+
+
+def _image_data_url_summary(value: str) -> str:
+    header = value.split(",", 1)[0]
+    return f"<image_data_url header={header} chars={len(value)}>"
+
+
+def _is_prompt_log_key(key_hint: str) -> bool:
+    key = key_hint.lower()
+    return key in TEXT_PROMPT_LOG_KEYS or any(marker in key for marker in PROMPT_LOG_KEY_MARKERS)
+
+
+def _redact_text_fragments_for_log(text: str) -> str:
+    text = DATA_IMAGE_URL_RE.sub(lambda match: _image_data_url_summary(match.group(0)), text)
+    text = BEARER_TOKEN_RE.sub(r"\1<redacted>", text)
+    text = SECRET_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}=<redacted>", text)
+    text = PROMPT_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}=<redacted>", text)
+    return OPENAI_STYLE_KEY_RE.sub("<redacted>", text)
+
+
+def summarize_url_for_log(value: str) -> str:
+    parsed = urlparse(str(value or ""))
+    if not parsed.scheme or not parsed.netloc:
+        return summarize_text_for_log(str(value), key_hint="url")
+    host = parsed.hostname or ""
+    if parsed.port:
+        host = f"{host}:{parsed.port}"
+    query = ""
+    if parsed.query:
+        pairs = parse_qsl(parsed.query, keep_blank_values=True)
+        query = "&".join(f"{key}=<redacted>" for key, _ in pairs) if pairs else "<redacted_query>"
+    fragment = "<redacted>" if parsed.fragment else ""
+    return urlunparse((parsed.scheme, host, parsed.path, "", query, fragment))
+
+
+def summarize_text_for_log(value: str, max_string_length: int = 160, key_hint: str = "") -> str:
+    text = str(value or "")
+    stripped = text.strip()
+    lowered = stripped.lower()
+    key_lowered = key_hint.lower()
+    if lowered.startswith("data:image"):
+        return _image_data_url_summary(stripped)
+    if any(marker in key_lowered for marker in IMAGE_LOG_KEY_MARKERS) and _looks_like_base64_blob(stripped):
+        return f"<image_base64 chars={len(stripped)}>"
+    if _is_prompt_log_key(key_lowered):
+        label = "prompt" if "prompt" in key_lowered else key_lowered or "text"
+        return f"<{label} chars={len(text)}>"
+    redacted_text = _redact_text_fragments_for_log(text)
+    if len(redacted_text) <= max_string_length:
+        return redacted_text
+    return f"{redacted_text[:max_string_length]}...<truncated chars={len(redacted_text)}>"
+
+
+def summarize_payload_for_log(payload: Any, max_string_length: int = 160, key_hint: str = "") -> Any:
+    """Build a compact, secret-safe payload summary for logs."""
+    if isinstance(payload, dict):
+        summary: Dict[str, Any] = {}
+        for key, value in payload.items():
+            key_text = str(key)
+            if any(marker in key_text.lower() for marker in SENSITIVE_LOG_KEY_MARKERS):
+                summary[key_text] = "<redacted>"
+            else:
+                summary[key_text] = summarize_payload_for_log(value, max_string_length, key_text)
+        return summary
+    if isinstance(payload, list):
+        return [summarize_payload_for_log(item, max_string_length, key_hint) for item in payload]
+    if isinstance(payload, tuple):
+        return [summarize_payload_for_log(item, max_string_length, key_hint) for item in payload]
+    if not isinstance(payload, str):
+        return payload
+    return summarize_text_for_log(payload, max_string_length, key_hint)
+
+
+def summarize_payload_json_for_log(payload: Any, max_string_length: int = 160) -> str:
+    return json.dumps(
+        summarize_payload_for_log(payload, max_string_length=max_string_length),
+        ensure_ascii=False,
+        default=str,
+    )
+
+
+def summarize_response_text_for_log(value: str, max_string_length: int = 500) -> str:
+    try:
+        return summarize_payload_json_for_log(json.loads(value), max_string_length=max_string_length)
+    except Exception:
+        return summarize_text_for_log(value, max_string_length=max_string_length)
 
 
 def extract_image_url_from_response(payload: Any, base_url: str) -> str:

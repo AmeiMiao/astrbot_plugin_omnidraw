@@ -3,7 +3,6 @@ AstrBot 万象画卷插件 v3.1 - OpenAI Chat 兼容实现
 功能：支持高阶多模态参数动态透传 (兼容 Midjourney/Gemini 等走 Chat 通道的代理节点)
 """
 import aiohttp
-import json
 import base64
 from typing import Any
 from astrbot.api import logger
@@ -14,6 +13,9 @@ from .base import (
     extract_error_message,
     extract_image_url_from_response,
     guess_image_content_type,
+    summarize_payload_json_for_log,
+    summarize_response_text_for_log,
+    summarize_text_for_log,
 )
 
 class OpenAIChatProvider(BaseProvider):
@@ -84,7 +86,7 @@ class OpenAIChatProvider(BaseProvider):
             "text": full_prompt
         })
         
-        logger.info(f"📝 [Chat/Vision通道] 最终发送给 API 的核心提示词:\n{prompt}")
+        logger.info(f"📝 [Chat/Vision通道] 最终提示词摘要: {summarize_text_for_log(prompt, key_hint='prompt')}")
 
         payload = {
             "model": self.config.model,
@@ -102,7 +104,7 @@ class OpenAIChatProvider(BaseProvider):
         
         if api_kwargs:
             payload.update(api_kwargs)
-            logger.info(f"📤 [Chat/Vision通道] 触发高级参数透传:\n{json.dumps(api_kwargs, ensure_ascii=False)}")
+            logger.info(f"📤 [Chat/Vision通道] 触发高级参数透传摘要: {summarize_payload_json_for_log(api_kwargs)}")
 
         headers = {
             "Content-Type": "application/json",
@@ -116,10 +118,14 @@ class OpenAIChatProvider(BaseProvider):
             status = response.status
             if status != 200:
                 error_text = await response.text()
+                logger.error("💥 Chat/Vision通道 API 返回错误摘要: " + summarize_response_text_for_log(error_text, max_string_length=500))
                 raise RuntimeError("HTTP " + str(status) + ": " + extract_error_message(error_text))
             
             result = await response.json()
             image_url = extract_image_url_from_response(result, self.config.base_url)
             if image_url:
                 return image_url
-            raise ValueError("Chat接口未返回有效图片链接。API原始返回: " + str(result))
+            raise ValueError(
+                "Chat接口未返回有效图片链接。API返回摘要: "
+                + summarize_payload_json_for_log(result, max_string_length=500)
+            )

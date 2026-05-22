@@ -1,11 +1,14 @@
 """图片 Provider 基类。"""
 import aiohttp
 import base64
+import json
 import mimetypes
 import os
+import re
 import threading
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Iterable, Optional, List
+from urllib.parse import urljoin, urlparse
 from astrbot.api import logger
 from ..models import ProviderConfig
 
@@ -15,6 +18,25 @@ _KEY_ROTATION_INDEX: Dict[str, int] = {}
 
 def normalize_base_url(base_url: str) -> str:
     return str(base_url or "").rstrip("/")
+
+
+def is_complete_endpoint_url(base_url: str) -> bool:
+    """Return True only for full URLs that point at a concrete request path."""
+    parsed = urlparse(normalize_base_url(base_url))
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False
+    path = parsed.path.rstrip("/")
+    if not path:
+        return False
+    segments = [segment for segment in path.split("/") if segment]
+    if not segments:
+        return False
+    version_like = re.compile(r"^v\d+(?:beta\d*)?$", re.IGNORECASE)
+    if len(segments) == 1 and version_like.fullmatch(segments[0]):
+        return False
+    if segments[-1].lower() == "api" or version_like.fullmatch(segments[-1]):
+        return False
+    return True
 
 
 def _has_endpoint_path(base_url: str, endpoint_suffixes: Iterable[str]) -> bool:
@@ -40,6 +62,18 @@ def strip_known_endpoint_path(base_url: str) -> str:
         if base_url.lower().endswith(suffix):
             return base_url[: -len(suffix)]
     return base_url
+
+
+def response_base_url(base_url: str) -> str:
+    api_root = strip_known_endpoint_path(base_url)
+    return api_root[:-3] if api_root.endswith("/v1") else api_root
+
+
+def resolve_response_url(value: str, base_url: str) -> str:
+    image_ref = str(value or "").strip()
+    if image_ref.startswith("http") or image_ref.startswith("data:"):
+        return image_ref
+    return urljoin(response_base_url(base_url).rstrip("/") + "/", image_ref.lstrip("/"))
 
 
 def build_chat_completions_endpoint(base_url: str) -> str:
@@ -120,6 +154,154 @@ def guess_image_content_type(image_path_or_url: str, content_type: str = "", fal
         return "image/tiff"
     guessed = mimetypes.guess_type(source)[0] or ""
     return guessed if guessed.startswith("image/") else fallback
+
+
+def extract_error_message(payload: Any) -> str:
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except Exception:
+            return payload
+
+    if not isinstance(payload, dict):
+        return str(payload)
+
+    error = payload.get("error")
+    if isinstance(error, dict):
+        for key in ("message", "msg", "detail", "error_msg", "code"):
+            if error.get(key):
+                return str(error[key])
+        return str(error)
+    if error:
+        return str(error)
+
+    for key in ("message", "msg", "detail", "error_msg"):
+        if payload.get(key):
+            value = payload[key]
+            if isinstance(value, (dict, list)):
+                return json.dumps(value, ensure_ascii=False)
+            return str(value)
+
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def extract_image_url_from_response(payload: Any, base_url: str) -> str:
+    """Extract an image URL or data URL from common image/chat/responses shapes."""
+
+    def likely_base64(value: str) -> bool:
+        text = value.strip()
+        if len(text) < 80:
+            return False
+        if not re.fullmatch(r"[A-Za-z0-9+/=\s]+", text):
+            return False
+        try:
+            base64.b64decode(text, validate=False)
+            return True
+        except Exception:
+            return False
+
+    def from_text(text: str) -> str:
+        text = str(text or "").strip()
+        if not text:
+            return ""
+        if text.startswith("data:image"):
+            return text
+        if text.startswith("{") or text.startswith("["):
+            try:
+                nested = json.loads(text)
+            except Exception:
+                nested = None
+            if nested is not None:
+                nested_image = walk(nested)
+                if nested_image:
+                    return nested_image
+        markdown_match = re.search(r"!\[[^\]]*\]\((data:image[^)]+|https?://[^)\s]+)\)", text)
+        if markdown_match:
+            return resolve_response_url(markdown_match.group(1), base_url)
+        url_match = re.search(r"(https?://[^\s\]\)\"']+)", text)
+        if url_match:
+            return resolve_response_url(url_match.group(1), base_url)
+        return ""
+
+    def coerce_image_value(value: Any, assume_base64: bool = False) -> str:
+        if isinstance(value, str):
+            text = value.strip()
+            extracted = from_text(text)
+            if extracted:
+                return extracted
+            if assume_base64 and likely_base64(text):
+                return "data:image/png;base64," + re.sub(r"\s+", "", text)
+            return ""
+        return walk(value)
+
+    def walk(value: Any) -> str:
+        if isinstance(value, str):
+            return from_text(value)
+        if isinstance(value, list):
+            for item in value:
+                image = walk(item)
+                if image:
+                    return image
+            return ""
+        if not isinstance(value, dict):
+            return ""
+
+        if value.get("type") == "image_generation_call" and value.get("result"):
+            image = coerce_image_value(value.get("result"), assume_base64=True)
+            if image:
+                return image
+
+        for key in ("b64_json", "base64", "image_base64", "image_data", "binary_data_base64"):
+            if key in value:
+                image = coerce_image_value(value.get(key), assume_base64=True)
+                if image:
+                    return image
+
+        if "image" in value:
+            image_value = value.get("image")
+            image = coerce_image_value(image_value, assume_base64=True)
+            if image:
+                return image
+            if isinstance(image_value, str):
+                text = image_value.strip()
+                if re.search(r"\.(?:png|jpe?g|webp|gif|bmp|avif)(?:[?#].*)?$", text, re.IGNORECASE):
+                    return resolve_response_url(text, base_url)
+
+        for key in ("url", "image_url", "uri"):
+            if key in value:
+                nested = value.get(key)
+                if isinstance(nested, dict) and "url" in nested:
+                    nested = nested.get("url")
+                if isinstance(nested, str) and nested.strip():
+                    image = from_text(nested)
+                    return image or resolve_response_url(nested, base_url)
+                image = coerce_image_value(nested)
+                if image:
+                    return image
+
+        for key in (
+            "data",
+            "images",
+            "image",
+            "output",
+            "output_text",
+            "result",
+            "results",
+            "choices",
+            "message",
+            "content",
+            "text",
+            "artifacts",
+            "generations",
+        ):
+            if key in value:
+                image = walk(value.get(key))
+                if image:
+                    return image
+
+        return ""
+
+    return walk(payload)
 
 
 class BaseProvider(ABC):

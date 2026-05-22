@@ -2,7 +2,6 @@ import aiohttp
 import base64
 import json
 from typing import Any
-from urllib.parse import urljoin
 
 from astrbot.api import logger
 
@@ -10,8 +9,9 @@ from .base import (
     BaseProvider,
     build_image_edits_endpoint,
     build_image_generations_endpoint,
+    extract_error_message,
+    extract_image_url_from_response,
     guess_image_content_type,
-    strip_known_endpoint_path,
 )
 
 class OpenAIProvider(BaseProvider):
@@ -44,15 +44,6 @@ class OpenAIProvider(BaseProvider):
         image_bytes = await self._get_image_bytes(image_path_or_url)
         mime_type = self._content_type(image_path_or_url)
         return f"data:{mime_type};base64," + base64.b64encode(image_bytes).decode("utf-8")
-
-    def _response_base_url(self, base_url: str) -> str:
-        api_root = strip_known_endpoint_path(base_url)
-        return api_root[:-3] if api_root.endswith("/v1") else api_root
-
-    def _resolve_image_url(self, img_url: str, base_url: str) -> str:
-        if img_url.startswith("http") or img_url.startswith("data:"):
-            return img_url
-        return urljoin(self._response_base_url(base_url).rstrip("/") + "/", img_url.lstrip("/"))
 
     async def generate_image(self, prompt: str, **kwargs: Any) -> str:
         current_key = self.get_current_key()
@@ -145,32 +136,13 @@ class OpenAIProvider(BaseProvider):
         if status != 200:
             error_text = await response.text()
             logger.error("💥 API 返回错误:\n" + error_text)
-            error_msg = error_text
-            try:
-                error_json = json.loads(error_text)
-                if "error" in error_json and "message" in error_json["error"]:
-                    error_msg = error_json["error"]["message"]
-            except Exception:
-                pass
+            error_msg = extract_error_message(error_text)
 
             raise RuntimeError("HTTP " + str(status) + ": " + error_msg)
 
         result = await response.json()
-
-        if "data" in result and len(result["data"]) > 0:
-            data_item = result["data"][0]
-            if "b64_json" in data_item:
-                return "data:image/png;base64," + data_item["b64_json"]
-            if "url" in data_item:
-                return self._resolve_image_url(str(data_item["url"]), base_url)
-
-        if "images" in result and isinstance(result["images"], list) and result["images"]:
-            image_item = result["images"][0]
-            if isinstance(image_item, dict) and "url" in image_item:
-                return self._resolve_image_url(str(image_item["url"]), base_url)
-            if isinstance(image_item, dict) and "b64_json" in image_item:
-                return "data:image/png;base64," + image_item["b64_json"]
-            if isinstance(image_item, str):
-                return self._resolve_image_url(image_item, base_url)
+        image_url = extract_image_url_from_response(result, base_url)
+        if image_url:
+            return image_url
 
         raise ValueError("API 返回结构异常，未找到图片数据: " + str(result))

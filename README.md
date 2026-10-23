@@ -2,9 +2,11 @@
 
 `astrbot_plugin_omnidraw` 是一个面向 AstrBot 的生图、改图、人设自拍和视频生成插件。你可以把它理解成一个“画图工作台”：配置好模型接口后，在群聊或私聊里发送指令，就能让机器人帮你画图、参考图片改图、按固定人设自拍，或者提交视频生成任务。
 
-交流与反馈：**[点击加入 QQ 群 1081773675](https://qm.qq.com/q/Qr45Vz0a8o)**
+交流与反馈：**点击链接加入群聊【雪碧的Astrbot插件交流群】：https://qm.qq.com/q/cmrmXaZaUg**
 
-推荐香蕉（nano-banana谷歌最强生图模型系列）以及gpt-image-2（支持4K）中转站：**[Meinianda AI](https://meinianda.top)**
+赞助商
+
+**https://orbitix.site** 满血不降智GPT 0.2x 
 
 ---
 

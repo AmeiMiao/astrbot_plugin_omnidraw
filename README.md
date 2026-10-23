@@ -6,7 +6,7 @@
 
 赞助商
 
-**https://orbitix.site** 满血不降智GPT 0.2x 
+**https://orbitix.site** 满血不降智GPT 0.2x GPT Image 2.5 1K 0.01/次
 
 ---
 
